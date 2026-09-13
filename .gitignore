@@ -1,4 +1,73 @@
-node_modules/
-.env
-*.log
+# Operating System
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment & Secrets
+.env
+.env.*
+.env*.local
+!.env.example
+*.pem
+*.key
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+
+# Node & Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build Outputs & Coverage
+dist/
+build/
+out/
+coverage/
+*.lcov
+.nyc_output/
+*.tsbuildinfo
+
+# Mobile (React Native / Expo)
+.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+metro-cache/
+ios/
+android/
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
+
+# Logs & Temporary files
+*.log
+tmp/
+temp/

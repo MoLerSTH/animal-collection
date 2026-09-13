@@ -1,13 +1,17 @@
 {
   "expo": {
     "name": "Animal Collection",
-    "slug": "animal Collection",
+    "slug": "animal-collection",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Animal Collection requires camera access to photograph animals."
+      },
+      "bundleIdentifier": "com.animalcollection.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,10 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.animalcollection.app"
+      "package": "com.animalcollection.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
