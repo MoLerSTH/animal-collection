@@ -39,3 +39,22 @@ def get_current_user(
 
     return user
 
+
+security_optional = HTTPBearer(auto_error=False)
+
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not credentials or not credentials.credentials:
+        return None
+    try:
+        payload = decode_access_token(credentials.credentials)
+        if not payload or not payload.get("sub"):
+            return None
+        return db.query(User).filter(User.id == payload.get("sub")).first()
+    except Exception:
+        return None
+
+

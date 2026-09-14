@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from src.core.config import settings
-from src.core.database import engine, Base
-from src.models import user  # ensure models are registered with Base
+from src.core.database import engine, Base, SessionLocal
+from src.models import user, animal, collection  # ensure models are registered with Base
+from src.db.seeds import seed_catalog_animals
+from src.services.storage_service import storage_service
 from src.api.v1 import api_router
 
 
@@ -16,6 +18,23 @@ async def lifespan(app: FastAPI):
         print("[Database] tables verified/created successfully.")
     except Exception as e:
         print(f"[Warning] Could not auto-create database tables on startup ({e}).")
+
+    # Ensure MinIO / S3 storage bucket exists
+    try:
+        storage_service.ensure_bucket_exists()
+    except Exception as e:
+        print(f"[Warning] Could not initialize storage bucket ({e}).")
+
+    # Seed master animal catalog
+    try:
+        db = SessionLocal()
+        try:
+            seed_catalog_animals(db)
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[Warning] Could not auto-seed animal catalog ({e}).")
+
     yield
     # Shutdown logic if any
 

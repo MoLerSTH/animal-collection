@@ -3,27 +3,16 @@ import {
   View,
   Text,
   Pressable,
-  SafeAreaView,
   StyleSheet,
-  Image,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
-import { CATALOG_SIZE, mockAnimals } from '../data/mockAnimals';
-
-// Conditional VisionCamera
-let CameraComponent: any = null;
-let useVisionCameraDevice: ((type: string) => any) | null = null;
-try {
-  const VisionCamera = require('react-native-vision-camera');
-  CameraComponent = VisionCamera.Camera;
-  useVisionCameraDevice = VisionCamera.useCameraDevice;
-} catch {
-  // Simulator or Expo Go fallback
-}
+import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Catch'>,
@@ -33,13 +22,18 @@ type Props = CompositeScreenProps<
 export default function CameraScreen({ navigation }: Props) {
   const cameraRef = useRef<any>(null);
   const [capturing, setCapturing] = useState(false);
+  const { summary, catalog } = useCollectionStore();
+
+  // ตรวจสอบสิทธิ์การเข้าถึงกล้อง
+  const { hasPermission, requestPermission } = useCameraPermission();
 
   // ตรวจหาอุปกรณ์กล้อง
-  const backDevice = useVisionCameraDevice ? useVisionCameraDevice('back') : null;
-  const frontDevice = useVisionCameraDevice ? useVisionCameraDevice('front') : null;
+  const backDevice = useCameraDevice('back');
+  const frontDevice = useCameraDevice('front');
   const device = backDevice ?? frontDevice;
 
-  const caughtCount = mockAnimals.filter((a) => !a.isLocked).length;
+  const caughtCount = summary.caughtCount;
+  const catalogSize = summary.totalCatalog || catalog.length || 18;
 
   // กดปุ่มถ่ายภาพ
   const handleCapture = async () => {
@@ -47,10 +41,13 @@ export default function CameraScreen({ navigation }: Props) {
     setCapturing(true);
 
     try {
-      if (CameraComponent && device && cameraRef.current) {
+      if (device && cameraRef.current) {
         const photo = await cameraRef.current.takePhoto();
         if (photo?.path) {
-          navigation.navigate('AnimalDetail', { imageUri: `file://${photo.path}` });
+          const formattedUri = photo.path.startsWith('file://')
+            ? photo.path
+            : `file://${photo.path}`;
+          navigation.navigate('AnimalDetail', { imageUri: formattedUri });
           return;
         }
       }
@@ -66,35 +63,76 @@ export default function CameraScreen({ navigation }: Props) {
     }
   };
 
+  // 1. กรณีผู้ใช้ยังไม่ได้ให้อนุญาตสิทธิ์กล้อง (Camera permission not granted)
+  if (!hasPermission) {
+    return (
+      <SafeAreaView style={styles.permissionContainer}>
+        <View style={styles.permissionCard}>
+          <Text style={styles.permissionEmoji}>📷</Text>
+          <Text style={styles.permissionTitle}>Camera Access</Text>
+          <Text style={styles.permissionText}>
+            We need camera access to photograph animals and add them to your collection.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Grant Camera Access"
+            onPress={requestPermission}
+            style={({ pressed }) => [
+              styles.permissionButton,
+              pressed && styles.permissionButtonPressed,
+            ]}
+          >
+            <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // 2. กรณีไม่มีอุปกรณ์กล้องบนเครื่องหรือ Emulator
+  if (!device) {
+    return (
+      <SafeAreaView style={styles.permissionContainer}>
+        <View style={styles.permissionCard}>
+          <Text style={styles.permissionEmoji}>🔍</Text>
+          <Text style={styles.permissionTitle}>No Camera Device Found</Text>
+          <Text style={styles.permissionText}>
+            No camera device found on this device or emulator.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Capture photo"
+            onPress={handleCapture}
+            style={({ pressed }) => [
+              styles.permissionButton,
+              pressed && styles.permissionButtonPressed,
+            ]}
+          >
+            <Text style={styles.permissionButtonText}>Simulate Animal Discovery</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // 3. กรณียืนยันสิทธิ์และมีอุปกรณ์กล้องพร้อมใช้งาน
   return (
     <View style={styles.container}>
-      {/* 1. Camera View / Preview */}
-      {CameraComponent && device ? (
-        <CameraComponent
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          device={device}
-          isActive
-          photo
-        />
-      ) : (
-        // ภาพ Preview สัตว์จำลองใน Simulator (ตามรูปตัวอย่างใน Figma)
-        <Image
-          source={{
-            uri: 'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
-          }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-      )}
+      <Camera
+        ref={cameraRef}
+        style={StyleSheet.absoluteFill}
+        device={device}
+        isActive={true}
+        photo={true}
+      />
 
-      {/* 2. UI Overlay */}
+      {/* UI Overlay */}
       <SafeAreaView style={styles.overlay}>
         {/* Header ชิดซ้ายตาม Figma Mockup */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Catch Animal</Text>
           <Text style={styles.headerSubtitle}>
-            Collected {caughtCount} / {CATALOG_SIZE}
+            Collected: {caughtCount} / {catalogSize}
           </Text>
         </View>
 
@@ -277,5 +315,60 @@ const styles = StyleSheet.create({
   shutterPressed: {
     transform: [{ scale: 0.94 }],
     opacity: 0.85,
+  },
+
+  // ── Permission & No Device Views ────────────────────
+  permissionContainer: {
+    flex: 1,
+    backgroundColor: '#F8F5EF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  permissionCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  permissionEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#3A2E2B',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  permissionText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(58, 46, 43, 0.7)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  permissionButton: {
+    backgroundColor: '#BA796B',
+    borderRadius: 9999,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    width: '100%',
+    alignItems: 'center',
+  },
+  permissionButtonPressed: {
+    opacity: 0.85,
+  },
+  permissionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

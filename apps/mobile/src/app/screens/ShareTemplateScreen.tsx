@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, SafeAreaView, Alert, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { mockAnimals } from '../data/mockAnimals';
 import PolaroidCard from '../components/PolaroidCard';
 import CustomButton from '../components/CustomButton';
 import { InstagramIcon, TikTokIcon, FacebookIcon, GalleryAddIcon } from '../components/ShareIcons';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ShareTemplate'>;
 
@@ -14,11 +15,11 @@ type ShareTarget = 'instagram' | 'tiktok' | 'facebook';
 export default function ShareTemplateScreen({ route, navigation }: Props) {
   const { animalId } = route.params;
   const [saved, setSaved] = useState(false);
+  const { getAnimalById, getGalleryGrid } = useCollectionStore();
 
-  const animal = useMemo(
-    () => mockAnimals.find((a) => a.id === animalId) ?? mockAnimals[0],
-    [animalId],
-  );
+  const animal = useMemo(() => {
+    return getAnimalById(animalId) ?? getGalleryGrid()[0];
+  }, [animalId, getAnimalById, getGalleryGrid]);
 
   const handleShare = (target: ShareTarget) => {
     // TODO: integrate expo-sharing / react-native-share and target-specific deep links

@@ -6,16 +6,17 @@ import {
   Image,
   ScrollView,
   Pressable,
-  SafeAreaView,
+  Alert,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Svg, { Path } from 'react-native-svg';
 import { RootStackParamList } from '../navigation/types';
-import { mockAnimals } from '../data/mockAnimals';
 import CustomButton from '../components/CustomButton';
 import AttributeBadge from '../components/AttributeBadge';
 import { AnimalItem } from '../types';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AnimalDetail'>;
 
@@ -52,13 +53,14 @@ function ChevronBackIcon({ color = '#3A2E2B', size = 20 }: { color?: string; siz
 
 export default function AnimalDetailScreen({ route, navigation }: Props) {
   const { imageUri, animalId } = route.params ?? {};
+  const { getAnimalById, addCollection, isSubmitting } = useCollectionStore();
 
   const existing: AnimalItem | undefined = useMemo(
-    () => mockAnimals.find((a) => a.id === animalId),
-    [animalId],
+    () => (animalId ? getAnimalById(animalId) : undefined),
+    [animalId, getAnimalById],
   );
 
-  const [name, setName] = useState(existing?.species ?? 'New Animal');
+  const [name, setName] = useState(existing?.name || existing?.species || 'Hippopotamus');
   const [story, setStory] = useState(existing?.story ?? '');
   const [favFood, setFavFood] = useState(existing?.favFood ?? '');
   const [temperament, setTemperament] = useState(existing?.temperament ?? '');
@@ -66,34 +68,35 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
 
   const displayImage = imageUri ?? existing?.imageUri ?? null;
 
-  const handleConfirm = () => {
-    // TODO: persist to AsyncStorage / app state (Zustand/Context) instead of local mock
-    const saved: AnimalItem = {
-      id: existing?.id ?? `local-${Date.now()}`,
-      name,
-      species: name,
-      category: existing?.category ?? 'Wild',
-      imageUri: displayImage,
-      story,
-      favFood,
-      temperament,
-      isFavorite,
-      isLocked: false,
-      caughtAt: existing?.caughtAt ?? new Date().toISOString(),
-    };
+  const handleConfirm = async () => {
+    if (isSubmitting) return;
 
-    // ตรวจสอบว่ามีหน้า ShareTemplate ใน Stack อยู่ก่อนหน้าแล้วหรือไม่ (กรณีเข้ามาจากปุ่ม Edit)
-    const routes = navigation.getState()?.routes;
-    const hasPreviousShareTemplate = routes?.some((r) => r.name === 'ShareTemplate');
-
-    if (hasPreviousShareTemplate) {
-      navigation.navigate({
-        name: 'ShareTemplate',
-        params: { animalId: saved.id },
-        merge: true,
+    try {
+      const saved = await addCollection({
+        photoUri: displayImage || 'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
+        animalId: existing?.id,
+        name: name.trim() || 'Discovered Animal',
+        story,
+        favFood,
+        temperament,
+        isFavorite,
       });
-    } else {
-      navigation.replace('ShareTemplate', { animalId: saved.id });
+
+      // ตรวจสอบว่ามีหน้า ShareTemplate ใน Stack อยู่ก่อนหน้าแล้วหรือไม่ (กรณีเข้ามาจากปุ่ม Edit)
+      const routes = navigation.getState()?.routes;
+      const hasPreviousShareTemplate = routes?.some((r) => r.name === 'ShareTemplate');
+
+      if (hasPreviousShareTemplate) {
+        navigation.navigate({
+          name: 'ShareTemplate',
+          params: { animalId: saved.id },
+          merge: true,
+        });
+      } else {
+        navigation.replace('ShareTemplate', { animalId: saved.id });
+      }
+    } catch (err) {
+      Alert.alert('Collection Notice', 'Could not sync with server, saved locally.');
     }
   };
 
@@ -201,7 +204,7 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
           <CustomButton label="Cancel" variant="secondary" onPress={() => navigation.goBack()} />
         </View>
         <View style={styles.buttonWrapper}>
-          <CustomButton label="Confirm" onPress={handleConfirm} />
+          <CustomButton label="Confirm" loading={isSubmitting} onPress={handleConfirm} />
         </View>
       </View>
     </SafeAreaView>

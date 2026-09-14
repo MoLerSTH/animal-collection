@@ -15,6 +15,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { UserProfile } from '../types';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 import {
   BellIcon,
   LockIcon,
@@ -38,17 +39,23 @@ const mockUser: UserProfile = {
   language: 'English',
   notificationsEnabled: true,
 };
-const defaultStats = { caught: 4, total: 18, favorites: 2, followers: 18, following: 12 };
 
 export default function UserProfileScreen({ navigation }: Props) {
   const { user, signOut } = useAuthStore();
+  const { summary } = useCollectionStore();
 
   const currentUser: UserProfile = {
     id: user?.id ?? 'u1',
     name: user?.name ?? 'Jane Doe',
     email: user?.email ?? 'jane.doe@email.com',
     avatarUri: user?.avatarUri ?? 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=200&auto=format&fit=crop',
-    stats: defaultStats,
+    stats: {
+      caught: summary.caughtCount,
+      total: summary.totalCatalog,
+      favorites: summary.favoritesCount,
+      followers: 18,
+      following: 12,
+    },
     language: 'English',
     notificationsEnabled: true,
   };

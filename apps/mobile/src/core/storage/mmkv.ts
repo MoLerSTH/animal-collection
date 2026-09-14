@@ -34,5 +34,7 @@ export const StorageKeys = {
   AUTH_USER: 'auth_user',
   AUTH_TOKENS: 'auth_tokens',
   IS_DEV_MODE: 'is_dev_mode',
+  COLLECTIONS_DATA: 'collections_data',
+  CATALOG_DATA: 'catalog_data',
 } as const;
 

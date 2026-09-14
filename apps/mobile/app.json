@@ -30,12 +30,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      // [
-      //   "react-native-vision-camera",
-      //   {
-      //     "cameraPermissionText": "Animal Collection requires camera access to photograph animals."
-      //   }
-      // ],
       "@react-native-google-signin/google-signin",
       "expo-image"
     ]

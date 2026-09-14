@@ -71,3 +71,4 @@ htmlcov/
 *.log
 tmp/
 temp/
+uploads/
