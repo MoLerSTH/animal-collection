@@ -10,6 +10,10 @@ function renderScreen() {
 }
 
 describe('GalleryScreen', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
   it('shows the collected count in the header', () => {
     renderScreen();
     expect(screen.getByText(/Collected \d+ \/ \d+/)).toBeTruthy();

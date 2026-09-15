@@ -12,6 +12,8 @@ services:
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-admin}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-password123}
+      - GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID:-520693286792-2jv9gk463vfm37rvpvpjgg76dm3b17lh.apps.googleusercontent.com}
+      - JWT_SECRET=${JWT_SECRET:-animal_collection_super_secret_jwt_key_2026}
     depends_on:
       - postgres
       - minio
@@ -25,12 +27,12 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: animal_minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

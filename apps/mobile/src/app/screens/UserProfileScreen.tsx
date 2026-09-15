@@ -5,15 +5,17 @@ import {
   Pressable,
   Image,
   ScrollView,
-  SafeAreaView,
   Alert,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { UserProfile } from '../types';
+import { useAuthStore } from '../../features/auth/stores/useAuthStore';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 import {
   BellIcon,
   LockIcon,
@@ -39,13 +41,35 @@ const mockUser: UserProfile = {
 };
 
 export default function UserProfileScreen({ navigation }: Props) {
+  const { user, signOut } = useAuthStore();
+  const { summary } = useCollectionStore();
+
+  const currentUser: UserProfile = {
+    id: user?.id ?? 'u1',
+    name: user?.name ?? 'Jane Doe',
+    email: user?.email ?? 'jane.doe@email.com',
+    avatarUri: user?.avatarUri ?? 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=200&auto=format&fit=crop',
+    stats: {
+      caught: summary.caughtCount,
+      total: summary.totalCatalog,
+      favorites: summary.favoritesCount,
+      followers: 18,
+      following: 12,
+    },
+    language: 'English',
+    notificationsEnabled: true,
+  };
+
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: () => (navigation as any).reset({ index: 0, routes: [{ name: 'Login' }] }),
+        onPress: async () => {
+          await signOut();
+          (navigation as any).reset({ index: 0, routes: [{ name: 'Login' }] });
+        },
       },
     ]);
   };
@@ -71,9 +95,9 @@ export default function UserProfileScreen({ navigation }: Props) {
           <View style={styles.userInfoRow}>
             <View style={styles.avatarOuterCircle}>
               <View style={styles.avatarInnerBox}>
-                {mockUser.avatarUri ? (
+                {currentUser.avatarUri ? (
                   <Image
-                    source={{ uri: mockUser.avatarUri }}
+                    source={{ uri: currentUser.avatarUri }}
                     style={styles.avatarImage}
                     resizeMode="cover"
                   />
@@ -84,8 +108,8 @@ export default function UserProfileScreen({ navigation }: Props) {
             </View>
 
             <View style={styles.userDetails}>
-              <Text style={styles.userName}>{mockUser.name}</Text>
-              <Text style={styles.userEmail}>{mockUser.email}</Text>
+              <Text style={styles.userName}>{currentUser.name}</Text>
+              <Text style={styles.userEmail}>{currentUser.email}</Text>
               <Pressable onPress={() => {}} style={styles.editProfileRow}>
                 <Text style={styles.editProfileText}>Edit Profile </Text>
                 <EditIcon color="#BA796B" size={13} />
@@ -95,11 +119,11 @@ export default function UserProfileScreen({ navigation }: Props) {
 
           {/* Stats Row with separators */}
           <View style={styles.statsContainer}>
-            <StatItem label="Caught" value={mockUser.stats.caught} />
+            <StatItem label="Caught" value={currentUser.stats.caught} />
             <View style={styles.statDivider} />
-            <StatItem label="Total" value={mockUser.stats.total} />
+            <StatItem label="Total" value={currentUser.stats.total} />
             <View style={styles.statDivider} />
-            <StatItem label="Favorites" value={mockUser.stats.favorites} />
+            <StatItem label="Favorites" value={currentUser.stats.favorites} />
           </View>
         </View>
 

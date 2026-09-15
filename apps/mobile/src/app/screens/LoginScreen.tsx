@@ -1,22 +1,48 @@
-import React, { useState } from 'react';
-import { View, Text, Image, ImageBackground, SafeAreaView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  Image,
+  ImageBackground,
+  Pressable,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { useAuthStore } from '../../features/auth/stores/useAuthStore';
+import { MOCK_DEV_USERS } from '../../features/auth/services/googleAuth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [loading, setLoading] = useState(false);
+  const { signInWithGoogle, signInMock, isLoading, isDevMode } = useAuthStore();
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
     try {
-      // TODO: wire up real Google auth (expo-auth-session / firebase / etc.)
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await signInWithGoogle();
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      if (err?.code !== 'SIGN_IN_CANCELLED' && err?.code !== '12501') {
+        Alert.alert('Sign-In Notice', 'Could not complete Google Sign-in. Switched to Dev Mode.', [
+          {
+            text: 'Continue with Mock Account',
+            onPress: async () => {
+              await signInMock();
+              navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      }
     }
+  };
+
+  const handleQuickMockLogin = async (userIndex: number) => {
+    await signInMock(MOCK_DEV_USERS[userIndex]);
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
   };
 
   return (
@@ -49,15 +75,15 @@ export default function LoginScreen({ navigation }: Props) {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Sign in with Google"
-                disabled={loading}
+                disabled={isLoading}
                 onPress={handleGoogleSignIn}
                 style={({ pressed }) => [
                   styles.googleButton,
                   pressed && styles.googleButtonPressed,
-                  loading && styles.googleButtonDisabled,
+                  isLoading && styles.googleButtonDisabled,
                 ]}
               >
-                {loading ? (
+                {isLoading ? (
                   <ActivityIndicator color="#3A2E2B" />
                 ) : (
                   <>
@@ -70,6 +96,32 @@ export default function LoginScreen({ navigation }: Props) {
                   </>
                 )}
               </Pressable>
+
+              {/* Dev Mode Banner & Quick Selectors */}
+              {isDevMode && (
+                <View style={styles.devSection}>
+                  <View style={styles.devBadge}>
+                    <Text style={styles.devBadgeText}>🛠️ DEV MODE (MOCK ACTIVE)</Text>
+                  </View>
+                  <Text style={styles.devSubtext}>Quick switch test profiles:</Text>
+                  <View style={styles.quickUserRow}>
+                    <Pressable
+                      disabled={isLoading}
+                      style={[styles.quickUserChip, isLoading && { opacity: 0.5 }]}
+                      onPress={() => handleQuickMockLogin(0)}
+                    >
+                      <Text style={styles.quickUserChipText}>👤 Jane (Ranger)</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={isLoading}
+                      style={[styles.quickUserChip, isLoading && { opacity: 0.5 }]}
+                      onPress={() => handleQuickMockLogin(1)}
+                    >
+                      <Text style={styles.quickUserChipText}>👤 Alex (Collector)</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -168,6 +220,51 @@ const styles = StyleSheet.create({
   googleLabel: {
     fontSize: 16,
     fontWeight: '600' as const,
+    color: '#3A2E2B',
+  },
+  devSection: {
+    marginTop: 18,
+    alignItems: 'center',
+    width: '100%',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(58, 46, 43, 0.1)',
+  },
+  devBadge: {
+    backgroundColor: '#BA796B',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  devBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  devSubtext: {
+    fontSize: 12,
+    color: 'rgba(58, 46, 43, 0.7)',
+    marginBottom: 8,
+  },
+  quickUserRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  quickUserChip: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(186, 121, 107, 0.3)',
+  },
+  quickUserChipText: {
+    fontSize: 11,
+    fontWeight: '600',
     color: '#3A2E2B',
   },
 });

@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, Pressable, SafeAreaView, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
-import { mockAnimals } from '../data/mockAnimals';
 import AnimalCard from '../components/AnimalCard';
 import { AnimalItem } from '../types';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Gallery'>,
@@ -22,8 +23,19 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 export default function GalleryScreen({ navigation }: Props) {
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [animals] = useState<AnimalItem[]>(mockAnimals);
+  const { getGalleryGrid, loadCollections, isLoading } = useCollectionStore();
 
+  useEffect(() => {
+    loadCollections();
+    const unsubscribe = navigation?.addListener?.('focus', () => {
+      loadCollections();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [navigation, loadCollections]);
+
+  const animals = getGalleryGrid();
   const caughtCount = animals.filter((a) => !a.isLocked).length;
 
   const visibleAnimals = useMemo(() => {
@@ -77,6 +89,8 @@ export default function GalleryScreen({ navigation }: Props) {
         numColumns={4}
         contentContainerStyle={styles.listContent}
         columnWrapperStyle={styles.columnWrapper}
+        refreshing={isLoading}
+        onRefresh={loadCollections}
         renderItem={({ item }) => (
           <View style={styles.cardWrapper}>
             <AnimalCard animal={item} onPress={handleAnimalPress} />

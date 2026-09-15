@@ -6,16 +6,18 @@ import {
   Image,
   ScrollView,
   Pressable,
-  SafeAreaView,
+  Alert,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Svg, { Path } from 'react-native-svg';
 import { RootStackParamList } from '../navigation/types';
-import { mockAnimals } from '../data/mockAnimals';
 import CustomButton from '../components/CustomButton';
 import AttributeBadge from '../components/AttributeBadge';
 import { AnimalItem } from '../types';
+import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
+import { CatalogAnimal } from '../../features/collections/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AnimalDetail'>;
 
@@ -52,48 +54,94 @@ function ChevronBackIcon({ color = '#3A2E2B', size = 20 }: { color?: string; siz
 
 export default function AnimalDetailScreen({ route, navigation }: Props) {
   const { imageUri, animalId } = route.params ?? {};
+  const { catalog, getAnimalById, addCollection, isSubmitting } = useCollectionStore();
 
   const existing: AnimalItem | undefined = useMemo(
-    () => mockAnimals.find((a) => a.id === animalId),
-    [animalId],
+    () => (animalId ? getAnimalById(animalId) : undefined),
+    [animalId, getAnimalById],
   );
+  // Find matching catalog animal if editing or navigating with animalId
+  const initialSpecies = useMemo(() => {
+    if (animalId) {
+      return (
+        catalog.find(
+          (c) =>
+            c.id === animalId ||
+            c.code === animalId ||
+            c.name.toLowerCase() === animalId.toLowerCase(),
+        ) ?? null
+      );
+    }
+    return catalog[0] ?? null;
+  }, [animalId, catalog]);
 
-  const [name, setName] = useState(existing?.species ?? 'New Animal');
-  const [story, setStory] = useState(existing?.story ?? '');
-  const [favFood, setFavFood] = useState(existing?.favFood ?? '');
-  const [temperament, setTemperament] = useState(existing?.temperament ?? '');
+  const [selectedSpecies, setSelectedSpecies] = useState<CatalogAnimal | null>(initialSpecies);
+  const [name, setName] = useState(
+    existing?.name || existing?.species || initialSpecies?.name || 'Hippopotamus',
+  );
+  const [story, setStory] = useState(existing?.story ?? initialSpecies?.defaultStory ?? '');
+  const [favFood, setFavFood] = useState(existing?.favFood ?? initialSpecies?.defaultFavFood ?? '');
+  const [temperament, setTemperament] = useState(
+    existing?.temperament ?? initialSpecies?.defaultTemperament ?? '',
+  );
   const [isFavorite, setIsFavorite] = useState(existing?.isFavorite ?? false);
 
   const displayImage = imageUri ?? existing?.imageUri ?? null;
 
-  const handleConfirm = () => {
-    // TODO: persist to AsyncStorage / app state (Zustand/Context) instead of local mock
-    const saved: AnimalItem = {
-      id: existing?.id ?? `local-${Date.now()}`,
-      name,
-      species: name,
-      category: existing?.category ?? 'Wild',
-      imageUri: displayImage,
-      story,
-      favFood,
-      temperament,
-      isFavorite,
-      isLocked: false,
-      caughtAt: existing?.caughtAt ?? new Date().toISOString(),
-    };
+  const handleSelectSpecies = (item: CatalogAnimal | null) => {
+    setSelectedSpecies(item);
+    if (item) {
+      if (!name || (selectedSpecies && name === selectedSpecies.name) || name === 'Hippopotamus') {
+        setName(item.name);
+      }
+      if (!story || (selectedSpecies && story === selectedSpecies.defaultStory)) {
+        setStory(item.defaultStory || '');
+      }
+      if (!favFood || (selectedSpecies && favFood === selectedSpecies.defaultFavFood)) {
+        setFavFood(item.defaultFavFood || '');
+      }
+      if (!temperament || (selectedSpecies && temperament === selectedSpecies.defaultTemperament)) {
+        setTemperament(item.defaultTemperament || '');
+      }
+    }
+  };
 
-    // ตรวจสอบว่ามีหน้า ShareTemplate ใน Stack อยู่ก่อนหน้าแล้วหรือไม่ (กรณีเข้ามาจากปุ่ม Edit)
-    const routes = navigation.getState()?.routes;
-    const hasPreviousShareTemplate = routes?.some((r) => r.name === 'ShareTemplate');
+  const handleConfirm = async () => {
+    if (isSubmitting) return;
 
-    if (hasPreviousShareTemplate) {
-      navigation.navigate({
-        name: 'ShareTemplate',
-        params: { animalId: saved.id },
-        merge: true,
+    try {
+      const saved = await addCollection({
+        photoUri: displayImage || 'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
+        animalId: existing?.id,
+        name: name.trim() || 'Discovered Animal',
+        photoUri:
+          displayImage ||
+          'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
+        animalId: selectedSpecies?.id,
+        name: name.trim() || selectedSpecies?.name || 'Discovered Animal',
+        story,
+        favFood,
+        temperament,
+        isFavorite,
       });
-    } else {
-      navigation.replace('ShareTemplate', { animalId: saved.id });
+
+      // ตรวจสอบว่ามีหน้า ShareTemplate ใน Stack อยู่ก่อนหน้าแล้วหรือไม่ (กรณีเข้ามาจากปุ่ม Edit)
+      // Check if ShareTemplate route is already in the stack
+      const routes = navigation.getState()?.routes;
+      const hasPreviousShareTemplate = routes?.some((r) => r.name === 'ShareTemplate');
+
+      if (hasPreviousShareTemplate) {
+        navigation.navigate({
+          name: 'ShareTemplate',
+          params: { animalId: saved.id },
+          merge: true,
+        });
+        navigation.navigate('ShareTemplate', { animalId: saved.id });
+      } else {
+        navigation.replace('ShareTemplate', { animalId: saved.id });
+      }
+    } catch (err) {
+      Alert.alert('Collection Notice', 'Could not sync with server, saved locally.');
     }
   };
 
@@ -136,12 +184,56 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
           )}
         </View>
 
+        {/* Species selector chips */}
         <View style={styles.fieldGroupFirst}>
+          <Text style={styles.label}>Animal Species</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.speciesChipRow}
+          >
+            {catalog.map((catItem) => {
+              const isSelected = selectedSpecies?.id === catItem.id;
+              return (
+                <Pressable
+                  key={catItem.id}
+                  onPress={() => handleSelectSpecies(catItem)}
+                  style={[styles.speciesChip, isSelected && styles.speciesChipSelected]}
+                >
+                  <Text
+                    style={[
+                      styles.speciesChipText,
+                      isSelected && styles.speciesChipTextSelected,
+                    ]}
+                  >
+                    {catItem.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => handleSelectSpecies(null)}
+              style={[styles.speciesChip, selectedSpecies === null && styles.speciesChipSelected]}
+            >
+              <Text
+                style={[
+                  styles.speciesChipText,
+                  selectedSpecies === null && styles.speciesChipTextSelected,
+                ]}
+              >
+                ✨ Custom / Other
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>Animal Name</Text>
           <TextInput
             value={name}
             onChangeText={setName}
             placeholder="e.g. Hippopotamus"
+            placeholder={selectedSpecies ? `e.g. ${selectedSpecies.name}` : 'e.g. My Discovery'}
             placeholderTextColor="#3A2E2B66"
             style={styles.input}
           />
@@ -201,7 +293,7 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
           <CustomButton label="Cancel" variant="secondary" onPress={() => navigation.goBack()} />
         </View>
         <View style={styles.buttonWrapper}>
-          <CustomButton label="Confirm" onPress={handleConfirm} />
+          <CustomButton label="Confirm" loading={isSubmitting} onPress={handleConfirm} />
         </View>
       </View>
     </SafeAreaView>
@@ -271,6 +363,29 @@ const styles = StyleSheet.create({
   },
   fieldGroupFirst: {
     marginTop: 20,
+  },
+  speciesChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  speciesChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(196, 164, 132, 0.2)',
+  },
+  speciesChipSelected: {
+    backgroundColor: '#3A2E2B',
+  },
+  speciesChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3A2E2B',
+  },
+  speciesChipTextSelected: {
+    color: '#FFFFFF',
   },
   fieldGroup: {
     marginTop: 16,

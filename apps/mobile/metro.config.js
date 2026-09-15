@@ -1,14 +1,18 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
 
-// NativeWind temporarily disabled: as of Sept 2026, nativewind's stable (v4)
-// metro transformer breaks under Expo SDK 57's Metro (0.84.5), and the v5
-// preview requires a full Tailwind v4 migration (postcss.config, no more
-// tailwind.config.js). Re-enable once nativewind ships an SDK 57-compatible
-// release. See conversation history for the exact errors hit.
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(projectRoot, '../..');
+
+const config = getDefaultConfig(projectRoot);
+
+// กำหนด watchFolders สำหรับ Monorepo
+config.watchFolders = [monorepoRoot];
+
+// ให้ Metro ค้นหา node_modules ทั้งใน app และ root
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(monorepoRoot, 'node_modules'),
+];
 
 module.exports = config;
-
-// --- Previous NativeWind wiring, restore once compatible: ---
-// const { withNativeWind } = require('nativewind/metro');
-// module.exports = withNativeWind(config, { input: './src/app/global.css' });

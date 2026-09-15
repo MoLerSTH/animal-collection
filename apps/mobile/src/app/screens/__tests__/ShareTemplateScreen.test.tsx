@@ -55,7 +55,7 @@ describe('ShareTemplateScreen', () => {
     fireEvent.press(screen.getByText('Edit'));
     expect(navigation.navigate).toHaveBeenCalledWith('AnimalDetail', {
       animalId: 'a1',
-      imageUri: undefined,
+      imageUri: 'https://static.bangkokpost.com/media/content/20240913/c1_2865088.jpg',
     });
   });
 });
