@@ -27,7 +27,13 @@ export default function GalleryScreen({ navigation }: Props) {
 
   useEffect(() => {
     loadCollections();
-  }, [loadCollections]);
+    const unsubscribe = navigation?.addListener?.('focus', () => {
+      loadCollections();
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [navigation, loadCollections]);
 
   const animals = getGalleryGrid();
   const caughtCount = animals.filter((a) => !a.isLocked).length;

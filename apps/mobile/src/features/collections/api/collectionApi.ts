@@ -85,17 +85,25 @@ export async function uploadPhotoApi(fileUri: string, token?: string): Promise<s
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/storage/upload`;
 
-  const formData = new FormData();
   const filename = fileUri.split('/').pop() || 'photo.jpg';
   const match = /\.(\w+)$/.exec(filename);
   const type = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
 
-  // React Native FormData format for file uploads
-  formData.append('file', {
-    uri: fileUri,
-    name: filename,
-    type,
-  } as any);
+  const formData = new FormData();
+
+  try {
+    // Convert local URI to Blob for modern React Native (Fabric / WinterCG standard)
+    const fileResponse = await fetch(fileUri);
+    const blob = await fileResponse.blob();
+    formData.append('file', blob, filename);
+  } catch {
+    // Fallback to legacy React Native file object shape (e.g. in test / mock environments)
+    formData.append('file', {
+      uri: fileUri,
+      name: filename,
+      type,
+    } as any);
+  }
 
   try {
     const headers: Record<string, string> = {};

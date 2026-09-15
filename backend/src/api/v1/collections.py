@@ -98,11 +98,31 @@ def create_collection_entry(
     
     # Auto-match by name if animalId wasn't found
     if not animal and payload.name:
+        search_name = payload.name.strip()
+        # 1. Exact name match
         animal = (
             db.query(Animal)
             .filter(Animal.name.ilike(payload.name.strip()))
+            .filter(Animal.name.ilike(search_name))
             .first()
         )
+        # 2. Substring / partial match on name or code
+        if not animal and len(search_name) >= 3:
+            animal = (
+                db.query(Animal)
+                .filter(
+                    (Animal.name.ilike(f"%{search_name}%"))
+                    | (Animal.code.ilike(f"%{search_name.lower().replace(' ', '_')}%"))
+                )
+                .first()
+            )
+        # 3. Check if any catalog animal name is contained within the search string
+        if not animal:
+            all_animals = db.query(Animal).all()
+            for a in all_animals:
+                if a.name.lower() in search_name.lower() or a.code.lower() in search_name.lower().replace(" ", "_"):
+                    animal = a
+                    break
 
     collection = UserCollection(
         user_id=current_user.id,

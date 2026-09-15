@@ -17,6 +17,7 @@ import CustomButton from '../components/CustomButton';
 import AttributeBadge from '../components/AttributeBadge';
 import { AnimalItem } from '../types';
 import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
+import { CatalogAnimal } from '../../features/collections/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AnimalDetail'>;
 
@@ -53,20 +54,57 @@ function ChevronBackIcon({ color = '#3A2E2B', size = 20 }: { color?: string; siz
 
 export default function AnimalDetailScreen({ route, navigation }: Props) {
   const { imageUri, animalId } = route.params ?? {};
-  const { getAnimalById, addCollection, isSubmitting } = useCollectionStore();
+  const { catalog, getAnimalById, addCollection, isSubmitting } = useCollectionStore();
 
   const existing: AnimalItem | undefined = useMemo(
     () => (animalId ? getAnimalById(animalId) : undefined),
     [animalId, getAnimalById],
   );
+  // Find matching catalog animal if editing or navigating with animalId
+  const initialSpecies = useMemo(() => {
+    if (animalId) {
+      return (
+        catalog.find(
+          (c) =>
+            c.id === animalId ||
+            c.code === animalId ||
+            c.name.toLowerCase() === animalId.toLowerCase(),
+        ) ?? null
+      );
+    }
+    return catalog[0] ?? null;
+  }, [animalId, catalog]);
 
-  const [name, setName] = useState(existing?.name || existing?.species || 'Hippopotamus');
-  const [story, setStory] = useState(existing?.story ?? '');
-  const [favFood, setFavFood] = useState(existing?.favFood ?? '');
-  const [temperament, setTemperament] = useState(existing?.temperament ?? '');
+  const [selectedSpecies, setSelectedSpecies] = useState<CatalogAnimal | null>(initialSpecies);
+  const [name, setName] = useState(
+    existing?.name || existing?.species || initialSpecies?.name || 'Hippopotamus',
+  );
+  const [story, setStory] = useState(existing?.story ?? initialSpecies?.defaultStory ?? '');
+  const [favFood, setFavFood] = useState(existing?.favFood ?? initialSpecies?.defaultFavFood ?? '');
+  const [temperament, setTemperament] = useState(
+    existing?.temperament ?? initialSpecies?.defaultTemperament ?? '',
+  );
   const [isFavorite, setIsFavorite] = useState(existing?.isFavorite ?? false);
 
   const displayImage = imageUri ?? existing?.imageUri ?? null;
+
+  const handleSelectSpecies = (item: CatalogAnimal | null) => {
+    setSelectedSpecies(item);
+    if (item) {
+      if (!name || (selectedSpecies && name === selectedSpecies.name) || name === 'Hippopotamus') {
+        setName(item.name);
+      }
+      if (!story || (selectedSpecies && story === selectedSpecies.defaultStory)) {
+        setStory(item.defaultStory || '');
+      }
+      if (!favFood || (selectedSpecies && favFood === selectedSpecies.defaultFavFood)) {
+        setFavFood(item.defaultFavFood || '');
+      }
+      if (!temperament || (selectedSpecies && temperament === selectedSpecies.defaultTemperament)) {
+        setTemperament(item.defaultTemperament || '');
+      }
+    }
+  };
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
@@ -76,6 +114,11 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
         photoUri: displayImage || 'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
         animalId: existing?.id,
         name: name.trim() || 'Discovered Animal',
+        photoUri:
+          displayImage ||
+          'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
+        animalId: selectedSpecies?.id,
+        name: name.trim() || selectedSpecies?.name || 'Discovered Animal',
         story,
         favFood,
         temperament,
@@ -83,6 +126,7 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
       });
 
       // ตรวจสอบว่ามีหน้า ShareTemplate ใน Stack อยู่ก่อนหน้าแล้วหรือไม่ (กรณีเข้ามาจากปุ่ม Edit)
+      // Check if ShareTemplate route is already in the stack
       const routes = navigation.getState()?.routes;
       const hasPreviousShareTemplate = routes?.some((r) => r.name === 'ShareTemplate');
 
@@ -92,6 +136,7 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
           params: { animalId: saved.id },
           merge: true,
         });
+        navigation.navigate('ShareTemplate', { animalId: saved.id });
       } else {
         navigation.replace('ShareTemplate', { animalId: saved.id });
       }
@@ -139,12 +184,56 @@ export default function AnimalDetailScreen({ route, navigation }: Props) {
           )}
         </View>
 
+        {/* Species selector chips */}
         <View style={styles.fieldGroupFirst}>
+          <Text style={styles.label}>Animal Species</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.speciesChipRow}
+          >
+            {catalog.map((catItem) => {
+              const isSelected = selectedSpecies?.id === catItem.id;
+              return (
+                <Pressable
+                  key={catItem.id}
+                  onPress={() => handleSelectSpecies(catItem)}
+                  style={[styles.speciesChip, isSelected && styles.speciesChipSelected]}
+                >
+                  <Text
+                    style={[
+                      styles.speciesChipText,
+                      isSelected && styles.speciesChipTextSelected,
+                    ]}
+                  >
+                    {catItem.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => handleSelectSpecies(null)}
+              style={[styles.speciesChip, selectedSpecies === null && styles.speciesChipSelected]}
+            >
+              <Text
+                style={[
+                  styles.speciesChipText,
+                  selectedSpecies === null && styles.speciesChipTextSelected,
+                ]}
+              >
+                ✨ Custom / Other
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>Animal Name</Text>
           <TextInput
             value={name}
             onChangeText={setName}
             placeholder="e.g. Hippopotamus"
+            placeholder={selectedSpecies ? `e.g. ${selectedSpecies.name}` : 'e.g. My Discovery'}
             placeholderTextColor="#3A2E2B66"
             style={styles.input}
           />
@@ -274,6 +363,29 @@ const styles = StyleSheet.create({
   },
   fieldGroupFirst: {
     marginTop: 20,
+  },
+  speciesChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  speciesChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(196, 164, 132, 0.2)',
+  },
+  speciesChipSelected: {
+    backgroundColor: '#3A2E2B',
+  },
+  speciesChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3A2E2B',
+  },
+  speciesChipTextSelected: {
+    color: '#FFFFFF',
   },
   fieldGroup: {
     marginTop: 16,

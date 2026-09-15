@@ -37,11 +37,29 @@ def get_animals_catalog(
             .all()
         )
         for c in user_colls:
+            target_aid = None
             if c.animal_id:
                 aid = str(c.animal_id)
                 if aid not in user_collections_by_animal:
                     user_collections_by_animal[aid] = []
                 user_collections_by_animal[aid].append(c)
+                target_aid = str(c.animal_id)
+            elif c.custom_name:
+                name_clean = c.custom_name.strip().lower()
+                for a in catalog_animals:
+                    a_name = a.name.lower()
+                    a_code = a.code.lower().replace("_", " ")
+                    if (
+                        a_name == name_clean
+                        or a_code == name_clean
+                        or (len(name_clean) >= 3 and (name_clean in a_name or a_name in name_clean))
+                    ):
+                        target_aid = str(a.id)
+                        break
+            if target_aid:
+                if target_aid not in user_collections_by_animal:
+                    user_collections_by_animal[target_aid] = []
+                user_collections_by_animal[target_aid].append(c)
 
     results = []
     for a in catalog_animals:

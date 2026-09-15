@@ -90,4 +90,37 @@ describe('useCollectionStore', () => {
     await useCollectionStore.getState().toggleFavorite(collId);
     expect(useCollectionStore.getState().collections[0].isFavorite).toBe(false);
   });
+
+  it('displays custom discovered animals in the gallery grid', async () => {
+    // Add custom discovery not in catalog
+    await useCollectionStore.getState().addCollection({
+      photoUri: 'file:///tmp/custom_bright.jpg',
+      name: 'Bright',
+      story: 'A friendly neighborhood dog',
+    });
+
+    const state = useCollectionStore.getState();
+    expect(state.collections).toHaveLength(1);
+
+    const grid = state.getGalleryGrid();
+    // 2 catalog animals + 1 custom animal = 3 total cards
+    expect(grid).toHaveLength(3);
+    const customAnimal = grid.find((a) => a.name === 'Bright');
+    expect(customAnimal).toBeDefined();
+    expect(customAnimal?.isLocked).toBe(false);
+    expect(customAnimal?.category).toBe('Wild');
+  });
+
+  it('matches animal species fuzzily when user enters partial name like Hippopota', async () => {
+    await useCollectionStore.getState().addCollection({
+      photoUri: 'file:///tmp/hippo_partial.jpg',
+      name: 'Hippopota',
+    });
+
+    const state = useCollectionStore.getState();
+    const grid = state.getGalleryGrid();
+    const hippo = grid.find((a) => a.species === 'Hippopotamus');
+    expect(hippo).toBeDefined();
+    expect(hippo?.isLocked).toBe(false);
+  });
 });

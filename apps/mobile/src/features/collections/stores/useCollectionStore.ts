@@ -42,6 +42,7 @@ export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
     scientificName: 'Meles meles',
     category: 'Wild',
     defaultImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgbbRRTiYg6KK7sD6fI1Ck_LpO3-Gl2N9iF1u5WHi--w&s=100',
+    defaultImageUrl: 'https://images.unsplash.com/photo-1579613832125-5d34a13ffe0a?w=800&auto=format&fit=crop',
     defaultStory: 'A tenacious digger with distinctive stripes.',
     defaultFavFood: 'Earthworms',
     defaultTemperament: 'Curious',
@@ -49,6 +50,9 @@ export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
     isCaught: true,
     userPhotoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgbbRRTiYg6KK7sD6fI1Ck_LpO3-Gl2N9iF1u5WHi--w&s=100',
     caughtCount: 1,
+    isCaught: false,
+    userPhotoUrl: undefined,
+    caughtCount: 0,
     isFavorite: false,
   },
   {
@@ -58,6 +62,7 @@ export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
     scientificName: 'Vulpes vulpes',
     category: 'Wild',
     defaultImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS4Waym_Io1FYyuWSay7-apZROFHcXslt88d2BbpViTrSbOjQXn9ztRNDBw&s=10',
+    defaultImageUrl: 'https://images.unsplash.com/photo-1516934024742-b461fba47600?w=800&auto=format&fit=crop',
     defaultStory: 'Clever woodland wanderer with a fluffy rust-colored tail.',
     defaultFavFood: 'Berries & Small Prey',
     defaultTemperament: 'Playful',
@@ -65,6 +70,9 @@ export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
     isCaught: true,
     userPhotoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS4Waym_Io1FYyuWSay7-apZROFHcXslt88d2BbpViTrSbOjQXn9ztRNDBw&s=10',
     caughtCount: 1,
+    isCaught: false,
+    userPhotoUrl: undefined,
+    caughtCount: 0,
     isFavorite: false,
   },
   {
@@ -74,6 +82,7 @@ export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
     scientificName: 'Macaca fascicularis',
     category: 'Wild',
     defaultImageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkrBi-HRf2jqsISYHfow-RM0rH7jLZgZFDeuIrIqFKMwcKCEi9meLr7PRS&s=10',
+    defaultImageUrl: 'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=800&auto=format&fit=crop',
     defaultStory: 'A quick-witted climber searching for tasty fruit snacks.',
     defaultFavFood: 'Bananas',
     defaultTemperament: 'Mischievous',
@@ -81,6 +90,9 @@ export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
     isCaught: true,
     userPhotoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkrBi-HRf2jqsISYHfow-RM0rH7jLZgZFDeuIrIqFKMwcKCEi9meLr7PRS&s=10',
     caughtCount: 1,
+    isCaught: false,
+    userPhotoUrl: undefined,
+    caughtCount: 0,
     isFavorite: false,
   },
   ...[
@@ -138,6 +150,7 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
   collections: [],
   summary: {
     caughtCount: 4,
+    caughtCount: 1,
     totalCatalog: 18,
     favoritesCount: 1,
   },
@@ -258,12 +271,24 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     // 3. Update store state and catalog unlocked state
     set((state) => {
       const updatedCollections = [createdItem, ...state.collections];
+      const cSpecies = (createdItem.animalSpecies || '').trim().toLowerCase();
+      const cName = (createdItem.name || '').trim().toLowerCase();
+
       const updatedCatalog = state.catalog.map((c) => {
+        const catName = c.name.trim().toLowerCase();
+        const catCode = c.code.trim().toLowerCase().replace(/_/g, ' ');
+
         const matches =
           c.id === createdItem.animalId ||
           c.code === createdItem.animalCode ||
           c.name.toLowerCase() === createdItem.animalSpecies.toLowerCase() ||
           c.name.toLowerCase() === createdItem.name.toLowerCase();
+          (createdItem.animalId && c.id === createdItem.animalId) ||
+          (createdItem.animalCode && c.code === createdItem.animalCode) ||
+          cSpecies === catName ||
+          cName === catName ||
+          cName === catCode ||
+          (cName.length >= 3 && (catName.includes(cName) || cName.includes(catName)));
 
         if (matches) {
           return {
@@ -277,7 +302,16 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         return c;
       });
 
-      const caughtCount = updatedCatalog.filter((a) => a.isCaught).length;
+      // Calculate distinct species caught + custom captures
+      const distinctSpecies = new Set<string>();
+      updatedCatalog.forEach((a) => {
+        if (a.isCaught) distinctSpecies.add(a.id);
+      });
+      updatedCollections.forEach((col) => {
+        if (!col.animalId) distinctSpecies.add(col.id);
+      });
+
+      const caughtCount = distinctSpecies.size;
       const favoritesCount = updatedCollections.filter((c) => c.isFavorite).length;
 
       return {
@@ -330,15 +364,30 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
 
   getGalleryGrid: () => {
     const { catalog, collections } = get();
+    const matchedCollIds = new Set<string>();
 
-    return catalog.map((cat, index) => {
+    // 1. Grid cards for master catalog species
+    const catalogCards: AnimalItem[] = catalog.map((cat, index) => {
+      const catName = cat.name.trim().toLowerCase();
+      const catCode = cat.code.trim().toLowerCase().replace(/_/g, ' ');
+
       // Look for user collection for this animal
-      const matchingColl = collections.find(
-        (c) =>
-          c.animalId === cat.id ||
-          c.animalCode === cat.code ||
-          c.animalSpecies.toLowerCase() === cat.name.toLowerCase()
-      );
+      const matchingColl = collections.find((c) => {
+        if (c.animalId && c.animalId === cat.id) return true;
+        if (c.animalCode && c.animalCode === cat.code) return true;
+        const cSpecies = (c.animalSpecies || '').trim().toLowerCase();
+        const cName = (c.name || '').trim().toLowerCase();
+        return (
+          cSpecies === catName ||
+          cName === catName ||
+          cName === catCode ||
+          (cName.length >= 3 && (catName.includes(cName) || cName.includes(catName)))
+        );
+      });
+
+      if (matchingColl) {
+        matchedCollIds.add(matchingColl.id);
+      }
 
       const isLocked = !cat.isCaught && !matchingColl;
       const displayImage = resolvePhotoUrl(
@@ -359,10 +408,35 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         caughtAt: matchingColl?.caughtAt,
       };
     });
+
+    // 2. Custom discoveries: Collections not tied to the 18 catalog species
+    const customCards: AnimalItem[] = collections
+      .filter((c) => !matchedCollIds.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        species: c.animalSpecies || c.name,
+        category: c.category || 'Discovered',
+        imageUri: resolvePhotoUrl(c.photoUrl),
+        story: c.story || '',
+        favFood: c.favFood || '',
+        temperament: c.temperament || '',
+        isFavorite: Boolean(c.isFavorite),
+        isLocked: false,
+        caughtAt: c.caughtAt,
+      }));
+
+    return [...catalogCards, ...customCards];
   },
 
   getAnimalById: (id: string) => {
     const grid = get().getGalleryGrid();
-    return grid.find((a) => a.id === id || a.species.toLowerCase() === id.toLowerCase());
+    const cleanId = (id || '').trim().toLowerCase();
+    return grid.find(
+      (a) =>
+        a.id.toLowerCase() === cleanId ||
+        a.species.toLowerCase() === cleanId ||
+        a.name.toLowerCase() === cleanId
+    );
   },
 }));
