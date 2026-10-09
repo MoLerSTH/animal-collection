@@ -27,6 +27,7 @@ export default function GalleryScreen({ navigation }: Props) {
 
   useEffect(() => {
     loadCollections();
+  }, [loadCollections]);
     const unsubscribe = navigation?.addListener?.('focus', () => {
       loadCollections();
     });

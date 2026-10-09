@@ -302,6 +302,7 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         return c;
       });
 
+      const caughtCount = updatedCatalog.filter((a) => a.isCaught).length;
       // Calculate distinct species caught + custom captures
       const distinctSpecies = new Set<string>();
       updatedCatalog.forEach((a) => {
@@ -366,12 +367,19 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     const { catalog, collections } = get();
     const matchedCollIds = new Set<string>();
 
+    return catalog.map((cat, index) => {
     // 1. Grid cards for master catalog species
     const catalogCards: AnimalItem[] = catalog.map((cat, index) => {
       const catName = cat.name.trim().toLowerCase();
       const catCode = cat.code.trim().toLowerCase().replace(/_/g, ' ');
 
       // Look for user collection for this animal
+      const matchingColl = collections.find(
+        (c) =>
+          c.animalId === cat.id ||
+          c.animalCode === cat.code ||
+          c.animalSpecies.toLowerCase() === cat.name.toLowerCase()
+      );
       const matchingColl = collections.find((c) => {
         if (c.animalId && c.animalId === cat.id) return true;
         if (c.animalCode && c.animalCode === cat.code) return true;
@@ -431,6 +439,7 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
 
   getAnimalById: (id: string) => {
     const grid = get().getGalleryGrid();
+    return grid.find((a) => a.id === id || a.species.toLowerCase() === id.toLowerCase());
     const cleanId = (id || '').trim().toLowerCase();
     return grid.find(
       (a) =>

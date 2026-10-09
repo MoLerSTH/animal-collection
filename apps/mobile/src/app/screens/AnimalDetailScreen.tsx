@@ -54,12 +54,18 @@ function ChevronBackIcon({ color = '#3A2E2B', size = 20 }: { color?: string; siz
 
 export default function AnimalDetailScreen({ route, navigation }: Props) {
   const { imageUri, animalId } = route.params ?? {};
+  const { getAnimalById, addCollection, isSubmitting } = useCollectionStore();
   const { catalog, getAnimalById, addCollection, isSubmitting } = useCollectionStore();
 
   const existing: AnimalItem | undefined = useMemo(
     () => (animalId ? getAnimalById(animalId) : undefined),
     [animalId, getAnimalById],
   );
+
+  const [name, setName] = useState(existing?.name || existing?.species || 'Hippopotamus');
+  const [story, setStory] = useState(existing?.story ?? '');
+  const [favFood, setFavFood] = useState(existing?.favFood ?? '');
+  const [temperament, setTemperament] = useState(existing?.temperament ?? '');
   // Find matching catalog animal if editing or navigating with animalId
   const initialSpecies = useMemo(() => {
     if (animalId) {
