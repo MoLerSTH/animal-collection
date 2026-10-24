@@ -7,7 +7,7 @@ interface IconProps {
 }
 
 // Bell Icon (Notifications)
-export function BellIcon({ color = '#3A2E2B', size = 18 }: IconProps) {
+export function BellIcon({ color = '#4A3022', size = 18 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -29,7 +29,7 @@ export function BellIcon({ color = '#3A2E2B', size = 18 }: IconProps) {
 }
 
 // Lock Icon (Privacy)
-export function LockIcon({ color = '#3A2E2B', size = 18 }: IconProps) {
+export function LockIcon({ color = '#4A3022', size = 18 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect
@@ -54,7 +54,7 @@ export function LockIcon({ color = '#3A2E2B', size = 18 }: IconProps) {
 }
 
 // Globe Icon (Language)
-export function GlobeIcon({ color = '#3A2E2B', size = 18 }: IconProps) {
+export function GlobeIcon({ color = '#4A3022', size = 18 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="9.5" stroke={color} strokeWidth={2} />
@@ -125,7 +125,7 @@ export function ChevronRightIcon({ color = 'rgba(58, 46, 43, 0.4)', size = 16 }:
 }
 
 // Edit Pencil Icon
-export function EditIcon({ color = '#BA796B', size = 13 }: IconProps) {
+export function EditIcon({ color = '#E06D79', size = 13 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path

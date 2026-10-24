@@ -1,3 +1,14 @@
+export const ANIMAL_TYPES = ['Mammal', 'Bird', 'Reptile', 'Fish', 'Amphibian', 'Insect', 'Invertebrate', 'Unknown'] as const;
+export type AnimalType = typeof ANIMAL_TYPES[number];
+export type HabitatTag = 'aquatic' | 'mountain' | 'safari';
+export interface IdentificationFacts {
+  identifiedSpecies?: string;
+  animalType?: AnimalType;
+  habitatTags?: HabitatTag[];
+  source?: 'capture' | 'starter_gift' | 'legacy';
+  capturedAt?: string | null;
+}
+
 export interface CatalogAnimal {
   id: string;
   code: string;
@@ -15,7 +26,13 @@ export interface CatalogAnimal {
   isFavorite: boolean;
 }
 
-export interface UserCollectionItem {
+export interface UserCollectionItem extends IdentificationFacts {
+  syncStatus?: 'pending' | 'synced';
+  syncError?: string;
+  localPhotoUri?: string;
+  localId?: string;
+  uploadedPhotoUrl?: string;
+  clientRequestId?: string;
   id: string;
   userId: string;
   animalId?: string | null;
@@ -41,7 +58,8 @@ export interface CollectionSummary {
   favoritesCount: number;
 }
 
-export interface CreateCollectionPayload {
+export interface CreateCollectionPayload extends Omit<IdentificationFacts, 'source'> {
+  clientRequestId?: string;
   animalId?: string;
   name: string;
   photoUrl: string;

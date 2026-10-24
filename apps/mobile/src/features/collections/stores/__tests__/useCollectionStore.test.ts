@@ -58,7 +58,8 @@ describe('useCollectionStore', () => {
     });
 
     expect(created.name).toBe('Moodeng');
-    expect(created.photoUrl).toBe('file:///tmp/caught_hippo.jpg');
+    expect(created.photoUrl).toMatch(/^file:\/\/\/documents\/captures\/.+\.jpg$/);
+    expect(created.syncStatus).toBe('pending');
 
     const state = useCollectionStore.getState();
     expect(state.collections).toHaveLength(1);
@@ -111,7 +112,7 @@ describe('useCollectionStore', () => {
     expect(customAnimal?.category).toBe('Wild');
   });
 
-  it('matches animal species fuzzily when user enters partial name like Hippopota', async () => {
+  it('does not unlock an unrelated catalog entry from a partial nickname', async () => {
     await useCollectionStore.getState().addCollection({
       photoUri: 'file:///tmp/hippo_partial.jpg',
       name: 'Hippopota',
@@ -121,6 +122,29 @@ describe('useCollectionStore', () => {
     const grid = state.getGalleryGrid();
     const hippo = grid.find((a) => a.species === 'Hippopotamus');
     expect(hippo).toBeDefined();
-    expect(hippo?.isLocked).toBe(false);
+    expect(hippo?.isLocked).toBe(true);
   });
+});
+
+it('persists corrected local classification without leaving a ghost catalog card', async () => {
+  const { useAuthStore } = require('../../../auth/stores/useAuthStore');
+  const userId = useAuthStore.getState().user?.id || 'local_user';
+  appStorage.clearAll();
+  useCollectionStore.setState({ownerId: userId, catalog: [{
+    id: 'hippo-id', code: 'hippopotamus', name: 'Hippopotamus', category: 'Zoo', catalogOrder: 1,
+    isCaught: true, caughtCount: 1, isFavorite: false, userPhotoUrl: 'file:///fish.jpg',
+  }], collections: [{
+    id: 'local_coll_fish', userId, animalId: 'hippo-id', animalSpecies: 'Hippopotamus', identifiedSpecies: 'Hippopotamus',
+    name: 'ปลาอ้วนๆ', category: 'Zoo', photoUrl: 'file:///fish.jpg', story: '', favFood: '', temperament: '', isFavorite: false,
+    source: 'capture', animalType: 'Mammal', habitatTags: [],
+  }]});
+  await useCollectionStore.getState().updateIdentification('local_coll_fish', {identifiedSpecies: 'Goldfish', animalType: 'Fish', habitatTags: ['aquatic']});
+  const state = useCollectionStore.getState();
+  expect(state.collections[0]).toMatchObject({name: 'ปลาอ้วนๆ', identifiedSpecies: 'Goldfish', animalType: 'Fish', source: 'capture'});
+  const discovered = state.getGalleryGrid().filter(item => !item.isLocked);
+  expect(discovered).toHaveLength(1);
+  expect(discovered[0]).toMatchObject({species: 'Goldfish', animalType: 'Fish', habitatTags: ['aquatic']});
+  useCollectionStore.setState({collections: []});
+  useCollectionStore.getState().hydrateForUser(userId);
+  expect(useCollectionStore.getState().collections[0].identifiedSpecies).toBe('Goldfish');
 });

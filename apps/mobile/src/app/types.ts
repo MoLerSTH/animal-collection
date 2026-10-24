@@ -1,4 +1,8 @@
-export interface AnimalItem {
+import type { IdentificationFacts } from '../features/collections/types';
+
+export interface AnimalItem extends IdentificationFacts {
+  syncStatus?: 'pending' | 'synced';
+  syncError?: string;
   id: string;
   name: string;
   species: string;
@@ -10,6 +14,8 @@ export interface AnimalItem {
   isFavorite: boolean;
   isLocked: boolean;
   caughtAt?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface UserProfile {

@@ -1,8 +1,11 @@
+import { PrivateImage as Image } from '../components/PrivateImage';
 import React from 'react';
+import AppIcon from '../components/AppIcon';
+import GoogleLogo from '../components/GoogleLogo';
+import { UserIcon } from '../components/CatalogIcons';
 import {
   View,
   Text,
-  Image,
   ImageBackground,
   Pressable,
   ActivityIndicator,
@@ -22,20 +25,10 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      if (await signInWithGoogle()) navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (err: any) {
       if (err?.code !== 'SIGN_IN_CANCELLED' && err?.code !== '12501') {
-        Alert.alert('Sign-In Notice', 'Could not complete Google Sign-in. Switched to Dev Mode.', [
-          {
-            text: 'Continue with Mock Account',
-            onPress: async () => {
-              await signInMock();
-              navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
-            },
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]);
+        Alert.alert('Sign-in unavailable', 'Could not connect your Google account to the app. Check your connection and try again.');
       }
     }
   };
@@ -84,15 +77,13 @@ export default function LoginScreen({ navigation }: Props) {
                 ]}
               >
                 {isLoading ? (
-                  <ActivityIndicator color="#3A2E2B" />
+                  <ActivityIndicator color="#4A3022" />
                 ) : (
                   <>
-                    <Image
-                      source={require('../../../assets/Logo-google.png')}
-                      style={styles.googleLogo}
-                      resizeMode="contain"
-                    />
-                    <Text style={styles.googleLabel}>Sign in with Google</Text>
+                    <View style={styles.googleLogo}>
+                      <GoogleLogo />
+                    </View>
+                    <Text style={styles.googleLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Sign in with Google</Text>
                   </>
                 )}
               </Pressable>
@@ -101,7 +92,7 @@ export default function LoginScreen({ navigation }: Props) {
               {isDevMode && (
                 <View style={styles.devSection}>
                   <View style={styles.devBadge}>
-                    <Text style={styles.devBadgeText}>🛠️ DEV MODE (MOCK ACTIVE)</Text>
+                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}><AppIcon name="tools" size={15}/><Text style={styles.devBadgeText}>DEV MODE (MOCK ACTIVE)</Text></View>
                   </View>
                   <Text style={styles.devSubtext}>Quick switch test profiles:</Text>
                   <View style={styles.quickUserRow}>
@@ -110,14 +101,14 @@ export default function LoginScreen({ navigation }: Props) {
                       style={[styles.quickUserChip, isLoading && { opacity: 0.5 }]}
                       onPress={() => handleQuickMockLogin(0)}
                     >
-                      <Text style={styles.quickUserChipText}>👤 Jane (Ranger)</Text>
+                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 5}}><UserIcon color="#4A3022" size={16}/><Text style={styles.quickUserChipText}>Jane (Ranger)</Text></View>
                     </Pressable>
                     <Pressable
                       disabled={isLoading}
                       style={[styles.quickUserChip, isLoading && { opacity: 0.5 }]}
                       onPress={() => handleQuickMockLogin(1)}
                     >
-                      <Text style={styles.quickUserChipText}>👤 Alex (Collector)</Text>
+                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 5}}><UserIcon color="#4A3022" size={16}/><Text style={styles.quickUserChipText}>Alex (Collector)</Text></View>
                     </Pressable>
                   </View>
                 </View>
@@ -141,7 +132,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 24,
   },
   centeredWrapper: {
     width: '100%',
@@ -172,7 +163,8 @@ const styles = StyleSheet.create({
     borderRadius: (LOGO_SIZE - 10) / 2,
   },
   card: {
-    width: '75%',
+    width: '100%',
+    maxWidth: 360,
     alignItems: 'center',
     borderRadius: 24,
     backgroundColor: '#f7ebdb',
@@ -185,7 +177,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#3A2E2B',
+    color: '#4A3022',
     marginBottom: 24,
   },
   buttonContainer: {
@@ -197,9 +189,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     backgroundColor: '#FFFFFF',
+    minHeight: 52,
     borderRadius: 9999,
     paddingVertical: 14,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -215,12 +208,15 @@ const styles = StyleSheet.create({
   googleLogo: {
     width: 20,
     height: 20,
+    flexShrink: 0,
     marginRight: 10,
   },
   googleLabel: {
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 16,
     fontWeight: '600' as const,
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
   devSection: {
     marginTop: 18,
@@ -231,7 +227,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(58, 46, 43, 0.1)',
   },
   devBadge: {
-    backgroundColor: '#BA796B',
+    backgroundColor: '#E06D79',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
@@ -265,6 +261,6 @@ const styles = StyleSheet.create({
   quickUserChipText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
 });

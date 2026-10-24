@@ -1,5 +1,7 @@
+import { PrivateImage as Image } from './PrivateImage';
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import AppIcon from './AppIcon';
+import { View, Text, StyleSheet } from 'react-native';
 import { AnimalItem } from '../types';
 
 interface PolaroidCardProps {
@@ -14,7 +16,7 @@ export default function PolaroidCard({ animal }: PolaroidCardProps) {
           <Image source={{ uri: animal.imageUri }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={styles.placeholderContainer}>
-            <Text style={styles.placeholderEmoji}>🐾</Text>
+            <AppIcon name="paw" size={44} color="#A47A5C"/>
           </View>
         )}
       </View>
@@ -94,7 +96,7 @@ const styles = StyleSheet.create({
   species: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
   categoryBadge: {
     borderRadius: 9999,
@@ -145,6 +147,6 @@ const styles = StyleSheet.create({
   attributeValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
 });

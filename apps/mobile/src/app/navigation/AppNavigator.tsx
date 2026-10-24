@@ -1,42 +1,56 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
+import OnboardingScreen from '../screens/OnboardingScreen';
+import { appStorage } from '../../core/storage/mmkv';
 import LoginScreen from '../screens/LoginScreen';
 import MainTabNavigator from './MainTabNavigator';
 import AnimalDetailScreen from '../screens/AnimalDetailScreen';
 import ShareTemplateScreen from '../screens/ShareTemplateScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import PrivacyScreen from '../screens/PrivacyScreen';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   const { isAuthenticated, isInitializing, initializeAuth } = useAuthStore();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
 
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
 
+  useEffect(() => {
+    if (!isInitializing && !isAuthenticated && appStorage.getString('hasSeenOnboarding') && navigationRef.isReady()) {
+      navigationRef.resetRoot({ index: 0, routes: [{ name: 'Login' }] });
+    }
+  }, [isAuthenticated, isInitializing, navigationRef]);
+
   if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#BA796B" />
+        <ActivityIndicator size="large" color="#E06D79" />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
-        initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
+        initialRouteName={!appStorage.getString('hasSeenOnboarding') ? 'Onboarding' : isAuthenticated ? 'MainTabs' : 'Login'}
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#F8F5EF' },
+          contentStyle: { backgroundColor: '#FDF8F2' },
         }}
       >
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Privacy" component={PrivacyScreen} />
         <Stack.Screen
           name="AnimalDetail"
           component={AnimalDetailScreen}
@@ -55,7 +69,7 @@ export default function AppNavigator() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#F8F5EF',
+    backgroundColor: '#FDF8F2',
     justifyContent: 'center',
     alignItems: 'center',
   },

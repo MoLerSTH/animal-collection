@@ -42,7 +42,7 @@ export default function CustomButton({
       {...pressableProps}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? '#FFFFFF' : '#3A2E2B'} />
+        <ActivityIndicator color={variant === 'primary' ? '#FFFFFF' : '#4A3022'} />
       ) : (
         <>
           {icon ? <>{icon}</> : null}
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   buttonPrimary: {
-    backgroundColor: '#3A2E2B',
+    backgroundColor: '#4A3022',
   },
   buttonSecondary: {
     backgroundColor: 'rgba(196, 164, 132, 0.4)',
@@ -95,10 +95,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   textSecondary: {
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
   textOutline: {
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
   textWithIcon: {
     marginLeft: 8,

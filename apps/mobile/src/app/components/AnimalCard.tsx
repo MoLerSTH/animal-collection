@@ -1,5 +1,7 @@
+import { PrivateImage as Image } from './PrivateImage';
 import React from 'react';
-import { Pressable, View, Text, Image, StyleSheet } from 'react-native';
+import AppIcon from './AppIcon';
+import { Pressable, View, Text, StyleSheet } from 'react-native';
 import { AnimalItem } from '../types';
 
 interface AnimalCardProps {
@@ -28,7 +30,7 @@ export default function AnimalCard({ animal, onPress }: AnimalCardProps) {
           <Image source={{ uri: animal.imageUri }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={styles.placeholder}>
-            <Text style={styles.placeholderIcon}>🐾</Text>
+            <AppIcon name="paw" size={44} color="#A47A5C"/>
           </View>
         )}
       </View>
@@ -88,6 +90,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '500',
-    color: '#3A2E2B',
+    color: '#4A3022',
   },
 });

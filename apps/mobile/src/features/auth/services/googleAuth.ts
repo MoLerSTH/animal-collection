@@ -1,5 +1,6 @@
+import { Platform } from 'react-native';
 import { AuthTokens, AuthUser } from '../types';
-import { exchangeGoogleTokenWithBackend } from '../api/authApi';
+import { exchangeGoogleTokenWithBackend, requestBackendSession } from '../api/authApi';
 
 let GoogleSigninModule: any = null;
 
@@ -33,16 +34,21 @@ export function isGoogleClientConfigured(): boolean {
   if (!webClientId) return false;
   // If still using placeholder from .env.example
   if (webClientId.includes('your_google_web_client_id')) return false;
-  return true;
+  if (Platform.OS === 'ios') {
+    const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    if (!iosClientId || iosClientId.includes('your_google_ios_client_id')) return false;
+  }
+  return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 
 export function configureGoogleSignin(): void {
-  if (!GoogleSigninModule) return;
+  if (!GoogleSigninModule || !isGoogleClientConfigured()) return;
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   if (isGoogleClientConfigured() && webClientId) {
     try {
       GoogleSigninModule.configure({
         webClientId,
+        ...(Platform.OS === 'ios' ? { iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID } : {}),
         scopes: ['profile', 'email'],
       });
       console.log('[Auth] GoogleSignin configured successfully with Client ID:', webClientId.substring(0, 15) + '...');
@@ -61,62 +67,48 @@ export interface SignInResult {
 export async function executeGoogleSignIn(): Promise<SignInResult> {
   // 1. If Google credentials are not configured or module unavailable, use Mock Flow
   if (!isGoogleClientConfigured() || !GoogleSigninModule) {
+    if (!__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'production') throw new Error('Google sign-in is not configured for this build.');
     console.log('[Auth] Google Client not configured or module missing, using Mock Flow.');
     return executeMockGoogleSignIn();
   }
 
-  // Ensure configured
-  configureGoogleSignin();
-
   // 2. Real Google Sign In Flow with 10s timeout protection
   try {
     console.log('[Auth] Checking Google Play Services...');
-    await GoogleSigninModule.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    if (Platform.OS === 'android') {
+      await GoogleSigninModule.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    }
 
     console.log('[Auth] Prompting Google Sign-In...');
+    // signIn awaits the library's internal configure promise. Attach its handler
+    // immediately so an async native configuration failure cannot go unhandled.
+    configureGoogleSignin();
     const nativeSignInPromise = GoogleSigninModule.signIn();
 
     // Timeout guard so the UI spinner NEVER hangs indefinitely
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('GOOGLE_SIGNIN_TIMEOUT')), 10000);
+      timeoutId = setTimeout(() => reject(new Error('GOOGLE_SIGNIN_TIMEOUT')), 10000);
     });
 
-    const response: any = await Promise.race([nativeSignInPromise, timeoutPromise]);
+    const response: any = await Promise.race([nativeSignInPromise, timeoutPromise]).finally(() => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    });
     console.log('[Auth] Google Sign-In native response received successfully.');
     
     // Support both new (v13+) response format and older format
+    if (response?.type === 'cancelled') {
+      throw Object.assign(new Error('Sign-in cancelled'), { code: 'SIGN_IN_CANCELLED' });
+    }
     const data = response?.data ?? response;
-    const idToken = response?.idToken ?? data?.idToken ?? 'dummy_real_token';
-    const profile = data?.user ?? response?.user;
+    const idToken = response?.idToken ?? data?.idToken;
+    if (!idToken) throw new Error('Google Sign-In did not return an ID token');
 
     // 2.1 Attempt Backend Token Exchange (PostgreSQL User Persistence + App JWT)
     console.log('[Auth] Exchanging Google ID Token with Backend API...');
-    const backendResult = await exchangeGoogleTokenWithBackend(idToken);
-    if (backendResult) {
-      console.log('[Auth] Backend token exchange successful! Logged in as:', backendResult.user.email);
-      return {
-        user: backendResult.user,
-        tokens: backendResult.tokens,
-        isMock: false,
-      };
-    }
-
-    console.log('[Auth] Backend unreachable, using client-side Google profile.');
-    // 2.2 Fallback: If backend is offline, preserve client-side Google profile
-    const user: AuthUser = {
-      id: profile?.id ?? `user_${Date.now()}`,
-      email: profile?.email ?? 'user@gmail.com',
-      name: profile?.name ?? 'Google Explorer',
-      avatarUri: profile?.photo ?? undefined,
-      googleId: profile?.id,
-    };
-
-    const tokens: AuthTokens = {
-      accessToken: idToken,
-      idToken,
-    };
-
-    return { user, tokens, isMock: false };
+    const backendResult = await requestBackendSession(idToken);
+    console.log('[Auth] Backend token exchange successful!');
+    return { ...backendResult, isMock: false };
   } catch (error: any) {
     console.warn('[Auth] Real Google Sign-In error:', error?.code || error?.message || error);
 
@@ -125,13 +117,40 @@ export async function executeGoogleSignIn(): Promise<SignInResult> {
       throw error;
     }
 
-    // For any timeouts, DEVELOPER_ERROR 10, or unhandled errors in dev mode, fallback to mock
-    console.log('[Auth] Automatically falling back to Dev Mock User to allow testing flow.');
-    return executeMockGoogleSignIn();
+    // A failed real login must never silently change the account to a mock user
+    // or use a Google ID token as an application session JWT.
+    throw error;
+  }
+}
+
+/** Restore the same Google account without opening the account picker. */
+export async function getSilentGoogleIdToken(expected: AuthUser): Promise<string | null> {
+  if (!GoogleSigninModule || !isGoogleClientConfigured()) return null;
+  configureGoogleSignin();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await GoogleSigninModule.signInSilently();
+        if (response?.type === 'noSavedCredentialFound') return null;
+        const data = response?.data ?? response;
+        const user = data?.user;
+        if (!user || (expected.googleId ? user.id !== expected.googleId : user.email?.toLowerCase() !== expected.email.toLowerCase())) return null;
+        const tokens = await GoogleSigninModule.getTokens();
+        return tokens?.idToken || data?.idToken || null;
+      })(),
+      new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Session restoration timed out. Please try again.')), 8000); }),
+    ]);
+  } catch (error: any) {
+    if (error?.code === 'SIGN_IN_REQUIRED' || error?.code === '4') return null;
+    throw error;
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
 export async function executeMockGoogleSignIn(selectedUserIndex = 0): Promise<SignInResult> {
+  if (!__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'production') throw new Error('Mock sign-in is only available in development builds.');
   // Simulate small network delay for realistic UI feeling
   await new Promise((resolve) => setTimeout(resolve, 350));
   const user = MOCK_DEV_USERS[selectedUserIndex] || MOCK_DEV_USERS[0];
@@ -140,6 +159,10 @@ export async function executeMockGoogleSignIn(selectedUserIndex = 0): Promise<Si
     refreshToken: `mock_jwt_refresh_token_${user.id}`,
     idToken: `mock_google_id_token_${user.id}`,
   };
+  // The protected discovery API requires a backend-signed session JWT.
+  // Keep the offline mock profile only when the development backend is unavailable.
+  const backendResult = await exchangeGoogleTokenWithBackend(tokens.idToken!);
+  if (backendResult) return { ...backendResult, isMock: true };
   return { user, tokens, isMock: true };
 }
 

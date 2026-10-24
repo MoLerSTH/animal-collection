@@ -21,8 +21,11 @@ export interface AuthState {
   isDevMode: boolean;
   // Actions
   initializeAuth: () => Promise<void>;
+  refreshSession: () => Promise<string | null>;
   signInWithGoogle: () => Promise<boolean>;
   signInMock: (customUser?: Partial<AuthUser>) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  updateUsername: (name: string) => Promise<void>;
 }
 

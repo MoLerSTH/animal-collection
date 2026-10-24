@@ -72,3 +72,25 @@ export function GalleryAddIcon({ color = '#FFFFFF', size = 20 }: IconProps) {
     </Svg>
   );
 }
+
+export function XIcon({color = '#FFFFFF', size = 22}: IconProps) {
+  return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" accessible={false}>
+    <Path d="M4 3 H9 L20 21 H15Z" stroke={color} strokeWidth="1.6"/>
+    <Path d="M19 3 L5 21" stroke={color} strokeWidth="1.6"/>
+  </Svg>;
+}
+
+export function LineIcon({size = 30}: IconProps) {
+  return <Svg width={size} height={size} viewBox="0 0 32 32" accessible={false}>
+    <Path d="M29 14 C29 7 23 3 16 3 C8 3 3 7 3 14 C3 20 8 24 14 25 L13 29 Q24 25 28 18Z" fill="white"/>
+    <G stroke="#25C957" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <Path d="M7 11 V17 H10 M13 11 V17 M16 17 V11 L20 17 V11 M26 11 H23 V17 H26 M23 14 H26"/>
+    </G>
+  </Svg>;
+}
+
+export function MoreIcon({color = '#6D5140', size = 26}: IconProps) {
+  return <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
+    <Circle cx="5" cy="12" r="2" fill={color}/><Circle cx="12" cy="12" r="2" fill={color}/><Circle cx="19" cy="12" r="2" fill={color}/>
+  </Svg>;
+}

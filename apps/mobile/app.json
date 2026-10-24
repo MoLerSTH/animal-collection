@@ -11,7 +11,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Animal Collection requires camera access to photograph animals."
       },
-      "bundleIdentifier": "com.animalcollection.app"
+      "bundleIdentifier": "com.animalcollection.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,14 +25,25 @@
       "package": "com.animalcollection.app",
       "permissions": [
         "android.permission.CAMERA"
-      ]
+      ],
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withAndroidBuildLocale",
       "@react-native-google-signin/google-signin",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Add a location to your animal discoveries."
+        }
+      ],
+      "expo-sharing",
+      "expo-secure-store",
+      "./plugins/withAndroidReleaseSigning"
     ]
   }
 }

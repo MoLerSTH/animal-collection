@@ -1,159 +1,88 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Alert, StyleSheet } from 'react-native';
+import { PrivateImage as Image } from '../components/PrivateImage';
+import React, { useState, useRef } from 'react';
+import { View, Text, Pressable, ScrollView, TextInput, Share, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import PolaroidCard from '../components/PolaroidCard';
-import CustomButton from '../components/CustomButton';
-import { InstagramIcon, TikTokIcon, FacebookIcon, GalleryAddIcon } from '../components/ShareIcons';
 import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
-
-type Props = NativeStackScreenProps<RootStackParamList, 'ShareTemplate'>;
-
-type ShareTarget = 'instagram' | 'tiktok' | 'facebook';
-
-export default function ShareTemplateScreen({ route, navigation }: Props) {
-  const { animalId } = route.params;
-  const [saved, setSaved] = useState(false);
-  const { getAnimalById, getGalleryGrid } = useCollectionStore();
-
-  const animal = useMemo(() => {
-    return getAnimalById(animalId) ?? getGalleryGrid()[0];
-  }, [animalId, getAnimalById, getGalleryGrid]);
-
-  const handleShare = (target: ShareTarget) => {
-    // TODO: integrate expo-sharing / react-native-share and target-specific deep links
-    Alert.alert('Share', `Sharing to ${target} is not yet wired up.`);
+import { captureRef, releaseCapture } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import AppIcon from '../components/AppIcon';
+import { InstagramIcon, FacebookIcon, XIcon, LineIcon, MoreIcon } from '../components/ShareIcons';
+import { ui, colors, Hippo } from '../components/Design';
+export default function ShareTemplateScreen({
+  route,
+  navigation
+}: NativeStackScreenProps<RootStackParamList, 'ShareTemplate'>) {
+  const cardRef = useRef<View>(null);
+  const [sharing, setSharing] = useState(false);
+  const store = useCollectionStore();
+  const animal = store.getAnimalById(route.params.animalId);
+  const [editing, setEditing] = useState(false);
+  const [customCaption, setCaption] = useState<string | null>(null);
+  const caption = customCaption ?? animal?.name ?? 'My discovery';
+  const share = async () => {
+    if (sharing) return;
+    setSharing(true);
+    let exported: string | undefined;
+    try {
+      if (Platform.OS !== 'web' && (await Sharing.isAvailableAsync())) {
+        exported = await captureRef(cardRef, {
+          format: 'png',
+          quality: 1,
+          result: 'tmpfile'
+        });
+        await Sharing.shareAsync(exported, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share Your Discovery',
+          UTI: 'public.png'
+        });
+      } else await Share.share({
+        title: 'Animal Collection',
+        message: `${caption}\nDiscovered with Animal Collection!`,
+        ...(animal?.imageUri ? {
+          url: animal.imageUri
+        } : {})
+      });
+    } catch {
+      Alert.alert('Share unavailable', 'Please try again.');
+    } finally {
+      if (exported) releaseCapture(exported);
+      setSharing(false);
+    }
   };
-
-  const handleAddToGallery = () => {
-    // TODO: persist `animal` into gallery state / AsyncStorage
-    setSaved(true);
-  };
-
+  const destinations = [
+    {label: 'Instagram', color: '#D34B91', icon: <InstagramIcon size={28}/>},
+    {label: 'Facebook', color: '#357AE8', icon: <FacebookIcon size={28}/>},
+    {label: 'X', color: '#252525', icon: <XIcon size={26}/>},
+    {label: 'LINE', color: '#25C957', icon: <LineIcon size={34}/>},
+    {label: 'More', color: '#DED7D0', icon: <MoreIcon size={27}/>},
+  ];
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Go back">
-          <Text style={styles.backButtonText}>‹</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>Share Template</Text>
+    <SafeAreaView style={ui.page}>
+      <View style={[ui.row, {padding: 20}]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" hitSlop={12} onPress={() => navigation.goBack()}><AppIcon name="back"/></Pressable>
+        <Text style={[ui.title, {fontSize: 19}]}>Share Your Discovery</Text>
       </View>
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.cardContainer}>
-          <PolaroidCard animal={animal} />
-        </View>
-
-        <View style={styles.shareActions}>
-          <ShareRow label="Share to Instagram Story" icon={<InstagramIcon />} onPress={() => handleShare('instagram')} />
-          <ShareRow label="Share to TikTok" icon={<TikTokIcon />} onPress={() => handleShare('tiktok')} />
-          <ShareRow label="Post to Facebook" icon={<FacebookIcon />} onPress={() => handleShare('facebook')} />
-          <ShareRow
-            label={saved ? 'Added to Gallery ✓' : 'Add to Gallery'}
-            icon={<GalleryAddIcon />}
-            onPress={handleAddToGallery}
-            disabled={saved}
-          />
-        </View>
+      <ScrollView contentContainerStyle={[ui.content, {flexGrow: 1, justifyContent: 'center'}]}>
+        {animal ? <View ref={cardRef} collapsable={false} style={{backgroundColor: 'white', padding: 14, paddingBottom: 24, transform: [{rotate: '-4deg'}], shadowColor: colors.ink, shadowOpacity: .15, shadowRadius: 10, elevation: 4, margin: 12}}>
+          <View style={{width: 85, height: 28, backgroundColor: '#E9CFABAA', position: 'absolute', top: -14, left: '38%', zIndex: 2, transform: [{rotate: '-5deg'}]}}/>
+          {animal.imageUri && <Image source={{uri: animal.imageUri}} style={{width: '100%', aspectRatio: .9}}/>}
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit caption" onPress={() => setEditing(!editing)} style={{position: 'absolute', top: 24, right: 24, backgroundColor: 'white', padding: 10, borderRadius: 24}}><AppIcon name="edit" size={18}/></Pressable>
+          {editing ? <TextInput accessibilityLabel="Share caption" value={caption} onChangeText={setCaption} onSubmitEditing={() => setEditing(false)} style={[ui.title, {marginTop: 18}]}/> : <Text style={[ui.title, {fontSize: 23, marginTop: 18}]}>{caption}</Text>}
+          <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4}}><Hippo size={42}/><Text style={{fontSize: 11, fontWeight: '700', color: colors.ink}}>Animal{'\n'}Collection</Text></View>
+        </View> : <Text style={ui.text}>This discovery could not be found.</Text>}
       </ScrollView>
-
-      <View style={styles.footer}>
-        <CustomButton
-          label="Edit"
-          variant="secondary"
-          onPress={() =>
-            navigation.navigate('AnimalDetail', { animalId: animal.id, imageUri: animal.imageUri ?? undefined })
-          }
-        />
+      <View style={{padding: 22, gap: 18}}>
+        <Text style={[ui.title, {fontSize: 20, textAlign: 'center'}]}>Share to</Text>
+        <View style={[ui.row, {justifyContent: 'space-around'}]}>
+          {destinations.map(({label, color, icon}) => <Pressable key={label} accessibilityLabel={`Share to ${label}`} onPress={share} disabled={!animal || sharing} style={{alignItems: 'center', gap: 5}}>
+            <View style={{width: 46, height: 46, borderRadius: 25, backgroundColor: color, alignItems: 'center', justifyContent: 'center'}}>{icon}</View>
+            <Text style={{fontSize: 10, color: colors.ink}}>{label}</Text>
+          </Pressable>)}
+        </View>
+        <Text style={{fontSize: 11, textAlign: 'center', color: colors.ink}}>Choose an installed app from your device’s share sheet.</Text>
       </View>
     </SafeAreaView>
   );
 }
-
-function ShareRow({
-  label,
-  icon,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={[styles.shareRow, disabled && styles.shareRowDisabled]}
-    >
-      {icon}
-      <Text style={styles.shareRowLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8F5EF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  backButtonText: {
-    fontSize: 20,
-    color: '#3A2E2B',
-  },
-  headerTitle: {
-    marginLeft: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#3A2E2B',
-  },
-  scrollView: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  cardContainer: {
-    marginTop: 16,
-  },
-  shareActions: {
-    marginTop: 24,
-    gap: 12,
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 8,
-  },
-  shareRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: '#3A2E2B',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  shareRowDisabled: {
-    opacity: 0.5,
-  },
-  shareRowEmoji: {
-    fontSize: 16,
-  },
-  shareRowLabel: {
-    marginLeft: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-});

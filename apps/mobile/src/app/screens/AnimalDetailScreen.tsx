@@ -1,439 +1,223 @@
-import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  Image,
-  ScrollView,
-  Pressable,
-  Alert,
-  StyleSheet,
-} from 'react-native';
+import { useAuthStore } from '../../features/auth/stores/useAuthStore';
+import { PrivateImage as Image } from '../components/PrivateImage';
+import IdentificationFields from '../components/IdentificationFields';
+import { AnimalType, HabitatTag } from '../../features/collections/types';
+import * as Location from 'expo-location';
+import { achievements } from '../data/achievements';
+import AppIcon from '../components/AppIcon';
+import { HeartIcon, LocationIcon } from '../components/CatalogIcons';
+import DetailTabs from '../components/DetailTabs';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Svg, { Path } from 'react-native-svg';
 import { RootStackParamList } from '../navigation/types';
-import CustomButton from '../components/CustomButton';
-import AttributeBadge from '../components/AttributeBadge';
-import { AnimalItem } from '../types';
 import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
-import { CatalogAnimal } from '../../features/collections/types';
-
+import { NameSaveTimeoutError } from '../../features/collections/api/collectionApi';
+import { ui, Button, colors } from '../components/Design';
+import { locationForAnimal } from './GalleryScreen';
 type Props = NativeStackScreenProps<RootStackParamList, 'AnimalDetail'>;
 
-// SVG Heart icon
-function HeartIcon({ filled, color }: { filled: boolean; color: string }) {
-  return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"
-        fill={filled ? color : 'none'}
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
+export default function AnimalDetailScreen(props: Props) {
+  // A reused navigation screen must initialize a separate draft for each card/photo.
+  return <AnimalDetailContent key={props.route.params.animalId || props.route.params.imageUri || props.route.key} {...props}/>;
 }
 
-// SVG Chevron Back icon
-function ChevronBackIcon({ color = '#3A2E2B', size = 20 }: { color?: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M15 18L9 12L15 6"
-        stroke={color}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-export default function AnimalDetailScreen({ route, navigation }: Props) {
-  const { imageUri, animalId } = route.params ?? {};
-  const { catalog, getAnimalById, addCollection, isSubmitting } = useCollectionStore();
-
-  const existing: AnimalItem | undefined = useMemo(
-    () => (animalId ? getAnimalById(animalId) : undefined),
-    [animalId, getAnimalById],
-  );
-  // Find matching catalog animal if editing or navigating with animalId
-  const initialSpecies = useMemo(() => {
-    if (animalId) {
-      return (
-        catalog.find(
-          (c) =>
-            c.id === animalId ||
-            c.code === animalId ||
-            c.name.toLowerCase() === animalId.toLowerCase(),
-        ) ?? null
-      );
-    }
-    return catalog[0] ?? null;
-  }, [animalId, catalog]);
-
-  const [selectedSpecies, setSelectedSpecies] = useState<CatalogAnimal | null>(initialSpecies);
-  const [name, setName] = useState(
-    existing?.name || existing?.species || initialSpecies?.name || 'Hippopotamus',
-  );
-  const [story, setStory] = useState(existing?.story ?? initialSpecies?.defaultStory ?? '');
-  const [favFood, setFavFood] = useState(existing?.favFood ?? initialSpecies?.defaultFavFood ?? '');
-  const [temperament, setTemperament] = useState(
-    existing?.temperament ?? initialSpecies?.defaultTemperament ?? '',
-  );
-  const [isFavorite, setIsFavorite] = useState(existing?.isFavorite ?? false);
-
-  const displayImage = imageUri ?? existing?.imageUri ?? null;
-
-  const handleSelectSpecies = (item: CatalogAnimal | null) => {
-    setSelectedSpecies(item);
-    if (item) {
-      if (!name || (selectedSpecies && name === selectedSpecies.name) || name === 'Hippopotamus') {
-        setName(item.name);
-      }
-      if (!story || (selectedSpecies && story === selectedSpecies.defaultStory)) {
-        setStory(item.defaultStory || '');
-      }
-      if (!favFood || (selectedSpecies && favFood === selectedSpecies.defaultFavFood)) {
-        setFavFood(item.defaultFavFood || '');
-      }
-      if (!temperament || (selectedSpecies && temperament === selectedSpecies.defaultTemperament)) {
-        setTemperament(item.defaultTemperament || '');
-      }
-    }
-  };
-
-  const handleConfirm = async () => {
-    if (isSubmitting) return;
-
+function AnimalDetailContent({
+  route,
+  navigation
+}: Props) {
+  const store = useCollectionStore();
+  const routeExisting = route.params.animalId ? store.getAnimalById(route.params.animalId) : undefined;
+  const [savedId, setSavedId] = useState(routeExisting && !routeExisting.isLocked ? routeExisting.id : '');
+  // Pin the selected collection once resolved. A previous name/species in the
+  // route can now resolve to an unrelated (locked) catalog entry after editing.
+  const savedAnimal = savedId ? store.getAnimalById(savedId) : undefined;
+  const existing = savedAnimal && !savedAnimal.isLocked ? savedAnimal : routeExisting;
+  useEffect(() => {
+    // Sync can replace a local placeholder with its canonical server ID.
+    if (existing && !existing.isLocked && existing.id !== savedId) setSavedId(existing.id);
+  }, [existing?.id, existing?.isLocked, savedId]);
+  const [species, setSpecies] = useState(existing?.species || route.params.identifiedSpecies || '');
+  const [identifiedSpecies, setIdentifiedSpecies] = useState(existing?.identifiedSpecies || existing?.species || route.params.identifiedSpecies || '');
+  const [animalType, setAnimalType] = useState<AnimalType>(existing?.animalType || route.params.animalType || 'Unknown');
+  const [tags, setTags] = useState<HabitatTag[]>(existing?.habitatTags || route.params.habitatTags || []);
+  const [editingIdentification, setEditingIdentification] = useState(false);
+  const [story, setStory] = useState(existing?.story || route.params.identifiedStory || '');
+  const [error, setError] = useState('');
+  const [newBadge, setNewBadge] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [cardName, setCardName] = useState(existing?.name || '');
+  const validCardName = cardName.trim().length > 0 && cardName.trim().length <= 100 && !/[\u0000-\u001f\u007f]/.test(cardName.trim());
+  const savedRecord = store.collections.find(item => item.id === savedId || item.localId === savedId || `local_coll_${item.id}` === savedId);
+  const pendingName = savedRecord ? store.pendingNames[savedRecord.id] ?? (savedRecord.localId ? store.pendingNames[savedRecord.localId] : undefined) : undefined;
+  const displayName = pendingName ?? savedRecord?.name ?? existing?.name ?? '';
+  const pendingSync = savedRecord?.syncStatus === 'pending' || existing?.syncStatus === 'pending';
+  const photo = existing?.imageUri || route.params.imageUri;
+  const catalog = store.catalog.find(a => a.name === identifiedSpecies);
+  const save = async () => {
+    if (!photo || !species.trim() || store.isSubmitting || saving) return;
+    const saveOwner = useAuthStore.getState().user?.id;
+    setSaving(true);
     try {
-      const saved = await addCollection({
-        photoUri: displayImage || 'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
-        animalId: existing?.id,
-        name: name.trim() || 'Discovered Animal',
-        photoUri:
-          displayImage ||
-          'https://images.unsplash.com/photo-1544985361-b421a9c1482e?w=800&auto=format&fit=crop',
-        animalId: selectedSpecies?.id,
-        name: name.trim() || selectedSpecies?.name || 'Discovered Animal',
-        story,
-        favFood,
-        temperament,
-        isFavorite,
+      let coordinates: {
+        latitude: number;
+        longitude: number;
+      } | undefined;
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.granted) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const position = await Promise.race([
+              (async () => (await Location.getLastKnownPositionAsync({maxAge: 60000})) || Location.getCurrentPositionAsync({accuracy: Location.Accuracy.Balanced}))(),
+              new Promise<null>(resolve => {timer = setTimeout(() => resolve(null), 5000);}),
+            ]);
+            if (position) coordinates = position.coords;
+          } finally { if (timer) clearTimeout(timer); }
+        }
+      } catch {/* Location is optional; collection must still save. */}
+      if (useAuthStore.getState().user?.id !== saveOwner) throw new Error('The account changed.');
+      const before = achievements(store.collections).filter(b => b.unlocked).length;
+      const result = await store.addCollection({
+        ...coordinates,
+        photoUri: photo,
+        animalId: catalog?.id,
+        name: species.trim(),
+        identifiedSpecies: identifiedSpecies.trim(), animalType, habitatTags: tags,
+        capturedAt: route.params.capturedAt,
+        story
       });
-
-      // ตรวจสอบว่ามีหน้า ShareTemplate ใน Stack อยู่ก่อนหน้าแล้วหรือไม่ (กรณีเข้ามาจากปุ่ม Edit)
-      // Check if ShareTemplate route is already in the stack
-      const routes = navigation.getState()?.routes;
-      const hasPreviousShareTemplate = routes?.some((r) => r.name === 'ShareTemplate');
-
-      if (hasPreviousShareTemplate) {
-        navigation.navigate({
-          name: 'ShareTemplate',
-          params: { animalId: saved.id },
-          merge: true,
-        });
-        navigation.navigate('ShareTemplate', { animalId: saved.id });
-      } else {
-        navigation.replace('ShareTemplate', { animalId: saved.id });
-      }
-    } catch (err) {
-      Alert.alert('Collection Notice', 'Could not sync with server, saved locally.');
+      setSavedId(result.id);
+      const updated = useCollectionStore.getState();
+      setNewBadge(achievements(updated.collections).filter(b => b.unlocked).length > before);
+      setError('');
+    } catch {
+      setError('Could not save. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
-
+  const updateIdentification = async () => {
+    if (!existing || !identifiedSpecies.trim() || saving) return;
+    setSaving(true);
+    try {
+      const before = achievements(store.collections).filter(b => b.unlocked).length;
+      await store.updateIdentification(existing.id, {identifiedSpecies: identifiedSpecies.trim(), animalType, habitatTags: tags});
+      const after = achievements(useCollectionStore.getState().collections).filter(b => b.unlocked).length;
+      if (after > before) Alert.alert('New Badge Unlocked!', 'ภารกิจสำเร็จแล้ว ดูเหรียญสีได้ที่หน้า User');
+      setEditingIdentification(false);
+      setError('');
+    } catch {
+      setError('อัปเดตไม่สำเร็จ โปรดตรวจสอบการเชื่อมต่อแล้วลองใหม่');
+    } finally { setSaving(false); }
+  };
+  const rename = async () => {
+    if (!existing || !validCardName || saving || store.isSyncing || cardName.trim() === displayName) return;
+    setSaving(true);
+    setSavingName(true);
+    setError('');
+    try {
+      const id = savedRecord?.id || existing.id;
+      const request = store.renameCollection(id, cardName.trim());
+      setEditingName(false);
+      await request;
+      const updated = useCollectionStore.getState().getAnimalById(id);
+      if (updated && !updated.isLocked) setSavedId(updated.id);
+      setEditingName(false);
+    } catch (error) {
+      setEditingName(true);
+      setError(error instanceof NameSaveTimeoutError ? error.message : error instanceof Error && error.message.startsWith('Your starter gift is waiting to sync.')
+        ? error.message : 'Could not change the card name. Please try again.');
+    } finally { setSaving(false); setSavingName(false); }
+  };
+  const identificationFields = <IdentificationFields species={identifiedSpecies} animalType={animalType} tags={tags}
+    onSpecies={setIdentifiedSpecies} onType={setAnimalType} onTags={setTags}/>;
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        {/* Back button with rounded background */}
-        <Pressable
-          onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
-          style={styles.headerButton}
-        >
-          <ChevronBackIcon />
+    <SafeAreaView style={ui.page}>
+      <ScrollView contentContainerStyle={ui.content}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={ui.row}>
+          <AppIcon name="back"/><Text style={ui.text}>Back</Text>
         </Pressable>
-
-        <Text style={styles.headerTitle}>{name}</Text>
-
-        {/* Favorite heart button with rounded pink background */}
-        <Pressable
-          onPress={() => setIsFavorite((prev: boolean) => !prev)}
-          accessibilityLabel="Toggle favorite"
-          style={styles.heartButton}
-        >
-          <HeartIcon filled={isFavorite} color="#BA796B" />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.imageContainer}>
-          {displayImage ? (
-            <Image source={{ uri: displayImage }} style={styles.image} resizeMode="cover" />
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <Text style={styles.placeholderEmoji}>🐾</Text>
-            </View>
-          )}
+        {!!savedId && !route.params.animalId && <View style={[ui.banner, ui.row, {backgroundColor: '#FFF0BC'}]}>
+          <AppIcon name={newBadge ? 'sparkles' : 'paw'} color="#C49138" size={28}/>
+          <Text style={[ui.text, {flex: 1, fontWeight: '700'}]}>{pendingSync ? 'Saved on this device · waiting to sync' : newBadge ? 'New Badge Unlocked!' : 'New discovery added!'}</Text>
+        </View>}
+        <View>
+          {photo && <Image source={{uri: photo}} style={{width: '100%', aspectRatio: 1, borderRadius: 20}}/>}
+          {/hippo/i.test(existing?.species || identifiedSpecies) && <View style={{position: 'absolute', bottom: 8, right: 8, backgroundColor: colors.gold, padding: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6}}>
+            <AppIcon name="crown" size={20}/><Text style={[ui.text, {fontWeight: '700'}]}>Legendary</Text>
+          </View>}
         </View>
-
-        {/* Species selector chips */}
-        <View style={styles.fieldGroupFirst}>
-          <Text style={styles.label}>Animal Species</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.speciesChipRow}
-          >
-            {catalog.map((catItem) => {
-              const isSelected = selectedSpecies?.id === catItem.id;
-              return (
-                <Pressable
-                  key={catItem.id}
-                  onPress={() => handleSelectSpecies(catItem)}
-                  style={[styles.speciesChip, isSelected && styles.speciesChipSelected]}
-                >
-                  <Text
-                    style={[
-                      styles.speciesChipText,
-                      isSelected && styles.speciesChipTextSelected,
-                    ]}
-                  >
-                    {catItem.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => handleSelectSpecies(null)}
-              style={[styles.speciesChip, selectedSpecies === null && styles.speciesChipSelected]}
-            >
-              <Text
-                style={[
-                  styles.speciesChipText,
-                  selectedSpecies === null && styles.speciesChipTextSelected,
-                ]}
-              >
-                ✨ Custom / Other
-              </Text>
-            </Pressable>
+        {existing ? <>
+          <View style={ui.row}>
+            <Text accessibilityRole="header" style={[ui.title, {flex: 1}]}>{displayName}</Text>
+            {!existing.isLocked && <Pressable accessibilityRole="button" accessibilityLabel="Edit card name" disabled={saving || store.isSyncing || pendingName !== undefined}
+              onPress={() => {setCardName(displayName); setEditingName(!editingName); setError('');}} style={ui.chip}>
+              <AppIcon name="edit" size={20}/>
+            </Pressable>}
+          </View>
+          {(savingName || pendingName !== undefined) && <Text accessibilityLiveRegion="polite" style={ui.text}>Saving name…</Text>}
+          {editingName && <View style={[ui.card, {gap: 12}]}>
+            <Text style={ui.text}>Card name</Text>
+            <TextInput accessibilityLabel="Card name" maxLength={100} editable={!saving} value={cardName} onChangeText={setCardName}
+              returnKeyType="done" onSubmitEditing={() => void rename()} style={[ui.card, ui.text]}/>
+            <Button label={saving ? 'Saving…' : 'Save card name'} disabled={saving || store.isSyncing || !validCardName || cardName.trim() === displayName} onPress={() => void rename()}/>
+            <Button label="Cancel name change" disabled={saving} onPress={() => setEditingName(false)}/>
+          </View>}
+        </> : <>
+          <Text style={ui.text}>Identify your animal</Text>
+          <ScrollView horizontal contentContainerStyle={{gap: 8}}>
+            {store.catalog.map(animal => <Pressable key={animal.id} onPress={() => {setSpecies(animal.name); setIdentifiedSpecies(animal.name); setAnimalType('Unknown'); setTags([]); setStory(animal.defaultStory || '');}} style={[ui.chip, species === animal.name && ui.active]}>
+              <Text style={ui.text}>{animal.name}</Text>
+            </Pressable>)}
           </ScrollView>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Animal Name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Hippopotamus"
-            placeholder={selectedSpecies ? `e.g. ${selectedSpecies.name}` : 'e.g. My Discovery'}
-            placeholderTextColor="#3A2E2B66"
-            style={styles.input}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>
-            Story & Quirks
-          </Text>
-          <TextInput
-            value={story}
-            onChangeText={setStory}
-            placeholder="What made this encounter special?"
-            placeholderTextColor="#3A2E2B66"
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            style={[styles.input, styles.textArea]}
-          />
-        </View>
-
-        <View style={styles.rowFieldGroup}>
-          <View style={styles.halfField}>
-            <Text style={styles.label}>Fav Snack</Text>
-            <TextInput
-              value={favFood}
-              onChangeText={setFavFood}
-              placeholder="Golden Berries"
-              placeholderTextColor="#3A2E2B66"
-              style={styles.input}
-            />
+          <TextInput accessibilityLabel="Animal name" value={species} onChangeText={setSpecies} placeholder="Animal name" style={[ui.card, ui.text]}/>
+        </>}
+        {!existing && !savedId && <>
+          <View style={ui.row}>
+            <Text style={[ui.text, {flex: 1}]}>ประเภทสัตว์: {animalType}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit animal identification" onPress={() => setEditingIdentification(!editingIdentification)} style={ui.chip}>
+              <Text style={ui.text}>{editingIdentification ? 'ปิดการแก้ไข' : 'แก้ไขข้อมูลสัตว์'}</Text>
+            </Pressable>
           </View>
-          <View style={styles.halfField}>
-            <Text style={styles.label}>
-              Temperament
-            </Text>
-            <TextInput
-              value={temperament}
-              onChangeText={setTemperament}
-              placeholder="Extremely Shy"
-              placeholderTextColor="#3A2E2B66"
-              style={styles.input}
-            />
-          </View>
+          {editingIdentification && identificationFields}
+        </>}
+        {existing && <>
+          <Text style={ui.text}>ประเภทสัตว์: {existing.animalType || 'Unknown'}</Text>
+          <Button label={editingIdentification ? 'ยกเลิกแก้ไขประเภทสัตว์' : 'ระบุประเภทสัตว์'} disabled={saving || pendingName !== undefined} onPress={() => {
+            if (!editingIdentification) {
+              setIdentifiedSpecies(existing.identifiedSpecies || existing.species);
+              setAnimalType(existing.animalType || 'Unknown'); setTags(existing.habitatTags || []);
+            }
+            setEditingIdentification(!editingIdentification);
+          }}/>
+          {editingIdentification && <>{identificationFields}<Button label={saving ? 'Saving…' : 'บันทึกข้อมูลสัตว์'} disabled={saving || !identifiedSpecies.trim()} onPress={updateIdentification}/></>}
+        </>}
+        <View style={ui.row}>
+          <AppIcon name="calendar" size={24}/>
+          <Text style={ui.text}>Captured on {new Date(existing?.caughtAt || Date.now()).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok'})}</Text>
         </View>
-
-        {(favFood || temperament) && (
-          <View style={styles.badgeRow}>
-            <AttributeBadge label="Fav Snack" value={favFood} />
-            <AttributeBadge label="Temperament" value={temperament} />
-          </View>
-        )}
+        <View style={ui.row}>
+          <LocationIcon size={24} color={colors.pink}/>
+          <Text style={[ui.text, {flex: 1}]}>{existing ? locationForAnimal(existing) : 'Location not recorded'}</Text>
+        </View>
+        <View style={[ui.banner, ui.row, {alignItems: 'flex-start'}]}>
+          <AppIcon name="book" size={24}/>
+          {existing ? <Text style={[ui.text, {flex: 1}]}>{existing.story || 'Your animal discovery.'}</Text> : <TextInput accessibilityLabel="Animal story" multiline value={story} onChangeText={setStory} placeholder="Add a story about your discovery" style={[ui.text, {flex: 1}]}/>}
+        </View>
+        {pendingSync && !!(savedRecord?.syncError || existing?.syncError) && <Text style={ui.text}>{savedRecord?.syncError || existing?.syncError}</Text>}
+        {pendingSync && <Button label={store.isSyncing ? 'Syncing…' : 'Retry sync'} disabled={store.isSyncing} onPress={() => void store.syncPendingCollections()}/>}
+        {!!error && <Text style={ui.text}>{error}</Text>}
+        <View style={ui.row}>
+          <View style={{flex: 2}}><Button label={savedId ? 'In Collection' : saving || store.isSubmitting ? 'Saving…' : 'Add to Collection'} icon={<HeartIcon color="white" size={18}/>} disabled={!!savedId || !species.trim() || !identifiedSpecies.trim() || store.isSubmitting || saving} onPress={save}/></View>
+          <View style={{flex: 1}}><Button label="Share" icon={<AppIcon name="share" color="white" size={17}/>} disabled={!savedId} onPress={() => navigation.navigate('ShareTemplate', {animalId: savedId})}/></View>
+        </View>
+        {existing && <Button label={existing.isFavorite ? 'Remove Favorite' : 'Add Favorite'} icon={<HeartIcon color="white" size={18}/>} disabled={store.isSyncing} onPress={() => {void store.toggleFavorite(existing.id).catch(error => Alert.alert('Could not save favorite', error.message));}}/>}
       </ScrollView>
-
-      <View style={styles.footer}>
-        <View style={styles.buttonWrapper}>
-          <CustomButton label="Cancel" variant="secondary" onPress={() => navigation.goBack()} />
-        </View>
-        <View style={styles.buttonWrapper}>
-          <CustomButton label="Confirm" loading={isSubmitting} onPress={handleConfirm} />
-        </View>
-      </View>
+      <DetailTabs/>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8F5EF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: 'rgba(196, 164, 132, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#3A2E2B',
-  },
-  heartButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: '#FBE4DC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollView: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  imageContainer: {
-    marginTop: 16,
-    aspectRatio: 4 / 3,
-    width: '100%',
-    overflow: 'hidden',
-    borderRadius: 16,
-    backgroundColor: 'rgba(196, 164, 132, 0.3)',
-  },
-  image: {
-    height: '100%',
-    width: '100%',
-  },
-  placeholderContainer: {
-    height: '100%',
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderEmoji: {
-    fontSize: 48,
-  },
-  fieldGroupFirst: {
-    marginTop: 20,
-  },
-  speciesChipRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  speciesChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(196, 164, 132, 0.2)',
-  },
-  speciesChipSelected: {
-    backgroundColor: '#3A2E2B',
-  },
-  speciesChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#3A2E2B',
-  },
-  speciesChipTextSelected: {
-    color: '#FFFFFF',
-  },
-  fieldGroup: {
-    marginTop: 16,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    color: 'rgba(58, 46, 43, 0.6)',
-  },
-  input: {
-    marginTop: 4,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#3A2E2B',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  textArea: {
-    minHeight: 100,
-  },
-  rowFieldGroup: {
-    marginTop: 16,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfField: {
-    flex: 1,
-  },
-  badgeRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 8,
-  },
-  buttonWrapper: {
-    flex: 1,
-  },
-});
