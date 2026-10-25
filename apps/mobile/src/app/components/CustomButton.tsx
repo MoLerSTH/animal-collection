@@ -8,6 +8,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
+import { typography } from './Design';
 
 type Variant = 'primary' | 'secondary' | 'outline';
 
@@ -88,8 +89,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   text: {
+    fontFamily: typography.semiBold,
     fontSize: 16,
-    fontWeight: '600',
+
   },
   textPrimary: {
     color: '#FFFFFF',

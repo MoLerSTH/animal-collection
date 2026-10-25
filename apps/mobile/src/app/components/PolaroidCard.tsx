@@ -3,6 +3,7 @@ import React from 'react';
 import AppIcon from './AppIcon';
 import { View, Text, StyleSheet } from 'react-native';
 import { AnimalItem } from '../types';
+import { typography } from './Design';
 
 interface PolaroidCardProps {
   animal: AnimalItem;
@@ -94,8 +95,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   species: {
+    fontFamily: typography.bold,
     fontSize: 18,
-    fontWeight: 'bold',
+
     color: '#4A3022',
   },
   categoryBadge: {
@@ -105,8 +107,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   categoryText: {
+    fontFamily: typography.semiBold,
     fontSize: 10,
-    fontWeight: '600',
+
     textTransform: 'uppercase',
     color: 'rgba(58,46,43,0.7)',
   },
@@ -115,12 +118,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   storyTitle: {
+    fontFamily: typography.semiBold,
     fontSize: 12,
-    fontWeight: '600',
+
     color: 'rgba(58,46,43,0.7)',
   },
   storyText: {
     marginTop: 2,
+    fontFamily: typography.regular,
     fontSize: 14,
     color: 'rgba(58,46,43,0.9)',
   },
@@ -139,14 +144,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   attributeLabel: {
+    fontFamily: typography.semiBold,
     fontSize: 10,
-    fontWeight: '500',
+
     textTransform: 'uppercase',
     color: 'rgba(58,46,43,0.6)',
   },
   attributeValue: {
+    fontFamily: typography.semiBold,
     fontSize: 12,
-    fontWeight: '600',
+
     color: '#4A3022',
   },
 });

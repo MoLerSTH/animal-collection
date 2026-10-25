@@ -9,7 +9,7 @@ import { useCollectionStore } from '../../features/collections/stores/useCollect
 import { getApiBaseUrl } from '../../features/collections/api/collectionApi';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
 import { authenticatedFetch } from '../../core/api/authenticatedFetch';
-import { ui, colors } from '../components/Design';
+import { ui, colors, typography } from '../components/Design';
 export default function MapScreen() {
   const [radar, setRadar] = useState(false);
   const [sightings, setSightings] = useState<{
@@ -49,7 +49,8 @@ export default function MapScreen() {
       }, radar === !!i && ui.active]}><Text style={{
           textAlign: 'center',
           color: radar === !!i ? 'white' : colors.ink,
-          fontWeight: '700'
+          fontFamily: typography.bold,
+
         }}>{s}</Text></Pressable>)}</View><View style={{
       flex: 1,
       backgroundColor: '#DDEAC8',
@@ -61,7 +62,8 @@ export default function MapScreen() {
         top: '42%',
         left: '35%',
         color: colors.ink,
-        fontWeight: '700'
+        fontFamily: typography.bold,
+
       }}>Chiang Mai Zoo</Text>{animals.map((a, i) => <Pressable accessibilityLabel={a.name} key={a.id} onPress={() => setSelected(a.name)} style={{
         position: 'absolute',
         left: `${15 + i * 29 % 65}%`,
@@ -87,5 +89,5 @@ export default function MapScreen() {
         bottom: 18,
         left: 14,
         right: 14
-      }]}><View style={ui.row}><LocationIcon color={colors.pink} size={24}/><Text style={[ui.text, {fontWeight: '700', flex: 1}]}>{selected}</Text><AppIcon name="chevron-right" size={18}/></View><Text style={ui.text}>{radar ? radarError || `Community Radar — ${sightings.length} พื้นที่ที่มีการค้นพบ` : 'แผนที่ภาพประกอบของคอลเลกชันของคุณ'}</Text></View></View></SafeAreaView>;
+      }]}><View style={ui.row}><LocationIcon color={colors.pink} size={24}/><Text style={[ui.text, {fontFamily: typography.bold, flex: 1}]}>{selected}</Text><AppIcon name="chevron-right" size={18}/></View><Text style={ui.text}>{radar ? radarError || `Community Radar — ${sightings.length} พื้นที่ที่มีการค้นพบ` : 'แผนที่ภาพประกอบของคอลเลกชันของคุณ'}</Text></View></View></SafeAreaView>;
 }

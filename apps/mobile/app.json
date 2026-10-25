@@ -43,6 +43,7 @@
       ],
       "expo-sharing",
       "expo-secure-store",
+      "expo-font",
       "./plugins/withAndroidReleaseSigning"
     ]
   }

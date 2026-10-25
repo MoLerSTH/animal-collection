@@ -23,12 +23,20 @@ jest.mock('expo-file-system', () => ({
 
 // react-native-safe-area-context needs a mock provider/insets in test env
 jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
   const inset = { top: 0, right: 0, bottom: 0, left: 0 };
+  const frame = { x: 0, y: 0, width: 390, height: 844 };
+  const SafeAreaInsetsContext = React.createContext(inset);
+  const SafeAreaFrameContext = React.createContext(frame);
   return {
-    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+    SafeAreaProvider: ({ children }: { children: any }) => children,
+    SafeAreaView: ({ children }: { children: any }) => children,
     useSafeAreaInsets: () => inset,
-    initialWindowMetrics: { insets: inset, frame: { x: 0, y: 0, width: 0, height: 0 } },
+    useSafeAreaFrame: () => frame,
+    SafeAreaInsetsContext,
+    SafeAreaFrameContext,
+    SafeAreaConsumer: SafeAreaInsetsContext.Consumer,
+    initialWindowMetrics: { insets: inset, frame },
   };
 });
 
@@ -70,3 +78,26 @@ jest.mock('expo-location',()=>({
 }));
 jest.mock('expo-sharing',()=>({isAvailableAsync:jest.fn(async()=>false),shareAsync:jest.fn(async()=>{})}));
 jest.mock('react-native-view-shot',()=>({captureRef:jest.fn(async()=>'/tmp/polaroid.png'),releaseCapture:jest.fn()}));
+jest.mock('expo-image-picker', () => ({
+  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///mock-camera.jpg' }] }),
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///mock-gallery.jpg' }] }),
+  requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+  MediaTypeOptions: { Images: 'Images', Videos: 'Videos', All: 'All' },
+  PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },
+}));
+
+jest.mock('expo-font', () => ({
+  isLoaded: jest.fn(() => true),
+  loadAsync: jest.fn().mockResolvedValue(true),
+  useFonts: jest.fn(() => [true, null]),
+}));
+
+jest.mock('@expo-google-fonts/kanit', () => ({
+  useFonts: jest.fn(() => [true, null]),
+  Kanit_400Regular: 1,
+  Kanit_500Medium: 2,
+  Kanit_600SemiBold: 3,
+  Kanit_700Bold: 4,
+  Kanit_800ExtraBold: 5,
+}));

@@ -44,17 +44,22 @@ export default function AppNavigator() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#FDF8F2' },
+          animation: 'none',
         }}
       >
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        <Stack.Screen
+          name="MainTabs"
+          component={MainTabNavigator}
+          options={{ animation: 'none' }}
+        />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Privacy" component={PrivacyScreen} />
         <Stack.Screen
           name="AnimalDetail"
           component={AnimalDetailScreen}
-          options={{ presentation: 'modal' }}
+          options={{ animation: 'none' }}
         />
         <Stack.Screen
           name="ShareTemplate"

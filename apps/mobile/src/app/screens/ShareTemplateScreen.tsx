@@ -9,7 +9,7 @@ import { captureRef, releaseCapture } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import AppIcon from '../components/AppIcon';
 import { InstagramIcon, FacebookIcon, XIcon, LineIcon, MoreIcon } from '../components/ShareIcons';
-import { ui, colors, Hippo } from '../components/Design';
+import { ui, colors, Hippo, typography } from '../components/Design';
 export default function ShareTemplateScreen({
   route,
   navigation
@@ -70,7 +70,7 @@ export default function ShareTemplateScreen({
           {animal.imageUri && <Image source={{uri: animal.imageUri}} style={{width: '100%', aspectRatio: .9}}/>}
           <Pressable accessibilityRole="button" accessibilityLabel="Edit caption" onPress={() => setEditing(!editing)} style={{position: 'absolute', top: 24, right: 24, backgroundColor: 'white', padding: 10, borderRadius: 24}}><AppIcon name="edit" size={18}/></Pressable>
           {editing ? <TextInput accessibilityLabel="Share caption" value={caption} onChangeText={setCaption} onSubmitEditing={() => setEditing(false)} style={[ui.title, {marginTop: 18}]}/> : <Text style={[ui.title, {fontSize: 23, marginTop: 18}]}>{caption}</Text>}
-          <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4}}><Hippo size={42}/><Text style={{fontSize: 11, fontWeight: '700', color: colors.ink}}>Animal{'\n'}Collection</Text></View>
+          <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4}}><Hippo size={42}/><Text style={{fontFamily: typography.bold, fontSize: 11, color: colors.ink}}>Animal{'\n'}Collection</Text></View>
         </View> : <Text style={ui.text}>This discovery could not be found.</Text>}
       </ScrollView>
       <View style={{padding: 22, gap: 18}}>
@@ -78,10 +78,10 @@ export default function ShareTemplateScreen({
         <View style={[ui.row, {justifyContent: 'space-around'}]}>
           {destinations.map(({label, color, icon}) => <Pressable key={label} accessibilityLabel={`Share to ${label}`} onPress={share} disabled={!animal || sharing} style={{alignItems: 'center', gap: 5}}>
             <View style={{width: 46, height: 46, borderRadius: 25, backgroundColor: color, alignItems: 'center', justifyContent: 'center'}}>{icon}</View>
-            <Text style={{fontSize: 10, color: colors.ink}}>{label}</Text>
+            <Text style={{fontFamily: typography.regular, fontSize: 10, color: colors.ink}}>{label}</Text>
           </Pressable>)}
         </View>
-        <Text style={{fontSize: 11, textAlign: 'center', color: colors.ink}}>Choose an installed app from your device’s share sheet.</Text>
+        <Text style={{fontFamily: typography.regular, fontSize: 11, textAlign: 'center', color: colors.ink}}>Choose an installed app from your device’s share sheet.</Text>
       </View>
     </SafeAreaView>
   );

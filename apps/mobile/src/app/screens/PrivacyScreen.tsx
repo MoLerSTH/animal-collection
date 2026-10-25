@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import AppIcon from '../components/AppIcon';
-import { colors, ui } from '../components/Design';
+import { colors, ui, typography } from '../components/Design';
 
 const sections = [
   ['Your account', 'When you sign in with Google, the app receives your name, email address, profile photo and Google account identifier. These connect your animal collection to your account.'],
@@ -26,4 +26,4 @@ export default function PrivacyScreen({ navigation }: NativeStackScreenProps<Roo
     }} style={ui.button}><Text style={ui.buttonText}>Read the full privacy policy</Text></Pressable>}
   </ScrollView></SafeAreaView>;
 }
-const styles = StyleSheet.create({content:{padding:20,gap:16,paddingBottom:32,maxWidth:520,width:'100%',alignSelf:'center'},back:{padding:12,borderRadius:16,backgroundColor:colors.sand},heading:{fontSize:17,fontWeight:'700',color:colors.ink,marginBottom:8}});
+const styles = StyleSheet.create({content:{padding:20,gap:16,paddingBottom:32,maxWidth:520,width:'100%',alignSelf:'center'},back:{padding:12,borderRadius:16,backgroundColor:colors.sand},heading:{fontFamily:typography.bold,fontSize:17,color:colors.ink,marginBottom:8}});

@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, StyleProp, ViewStyle } from 'react-native';
+import { typography } from './Design';
 
 interface AttributeBadgeProps {
   label: string;
@@ -27,16 +28,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   label: {
+    fontFamily: typography.medium,
     fontSize: 12,
-    fontWeight: '500',
+
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     color: 'rgba(58, 46, 43, 0.6)',
   },
   value: {
     marginTop: 4,
+    fontFamily: typography.semiBold,
     fontSize: 14,
-    fontWeight: '600',
+
     color: '#4A3022',
   },
 });

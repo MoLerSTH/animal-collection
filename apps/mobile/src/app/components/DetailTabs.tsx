@@ -1,26 +1,19 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList, MainTabParamList } from '../navigation/types';
-import { TabIcon } from './TabIcons';
-import { colors } from './Design';
-export default function DetailTabs() {
-  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  return <View style={{
-    flexDirection: 'row',
-    backgroundColor: colors.cream,
-    borderTopWidth: 1,
-    borderColor: colors.sand,
-    paddingVertical: 12
-  }}>{(['Gallery', 'Catch', 'User'] as (keyof MainTabParamList)[]).map(name => <Pressable key={name} accessibilityRole="button" onPress={() => nav.navigate('MainTabs', {
-      screen: name
-    })} style={{
-      flex: 1,
-      alignItems: 'center',
-      gap: 5
-    }}><TabIcon name={name} color={name === 'Catch' ? colors.pink : colors.ink}/><Text style={{
-        fontSize: 11,
-        color: name === 'Catch' ? colors.pink : colors.ink
-      }}>{name}</Text></Pressable>)}</View>;
+import AppBottomTabBar from './AppBottomTabBar';
+import { MainTabParamList } from '../navigation/types';
+
+export interface DetailTabsProps {
+  activeTab?: keyof MainTabParamList;
+  onTabPress?: (tabName: keyof MainTabParamList) => void;
+}
+
+/**
+ * Backward-compatible wrapper that renders the Design System's unified AppBottomTabBar.
+ * Ensures complete visual and interaction consistency across all screens without duplication.
+ */
+export default function DetailTabs({
+  activeTab = 'Gallery',
+  onTabPress,
+}: DetailTabsProps = {}) {
+  return <AppBottomTabBar activeTab={activeTab} onTabPress={onTabPress} />;
 }

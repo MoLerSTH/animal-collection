@@ -3,6 +3,7 @@ import React from 'react';
 import AppIcon from '../components/AppIcon';
 import GoogleLogo from '../components/GoogleLogo';
 import { UserIcon } from '../components/CatalogIcons';
+import { typography } from '../components/Design';
 import {
   View,
   Text,
@@ -175,8 +176,9 @@ const styles = StyleSheet.create({
     height: LOGO_OVERLAP + 12,
   },
   title: {
+    fontFamily: typography.bold,
     fontSize: 24,
-    fontWeight: 'bold',
+
     color: '#4A3022',
     marginBottom: 24,
   },
@@ -214,8 +216,9 @@ const styles = StyleSheet.create({
   googleLabel: {
     flexShrink: 1,
     minWidth: 0,
+    fontFamily: typography.semiBold,
     fontSize: 16,
-    fontWeight: '600' as const,
+
     color: '#4A3022',
   },
   devSection: {
@@ -235,11 +238,13 @@ const styles = StyleSheet.create({
   },
   devBadgeText: {
     color: '#FFFFFF',
+    fontFamily: typography.bold,
     fontSize: 10,
-    fontWeight: '700',
+
     letterSpacing: 0.5,
   },
   devSubtext: {
+    fontFamily: typography.regular,
     fontSize: 12,
     color: 'rgba(58, 46, 43, 0.7)',
     marginBottom: 8,
@@ -259,8 +264,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(186, 121, 107, 0.3)',
   },
   quickUserChipText: {
+    fontFamily: typography.semiBold,
     fontSize: 11,
-    fontWeight: '600',
+
     color: '#4A3022',
   },
 });

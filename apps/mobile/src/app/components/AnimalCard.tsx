@@ -3,6 +3,7 @@ import React from 'react';
 import AppIcon from './AppIcon';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
 import { AnimalItem } from '../types';
+import { typography } from './Design';
 
 interface AnimalCardProps {
   animal: AnimalItem;
@@ -88,8 +89,9 @@ const styles = StyleSheet.create({
   speciesText: {
     marginTop: 4,
     textAlign: 'center',
+    fontFamily: typography.semiBold,
     fontSize: 12,
-    fontWeight: '500',
+
     color: '#4A3022',
   },
 });

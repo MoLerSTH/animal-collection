@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import SettingsScreen from '../SettingsScreen';
 import UserProfileScreen from '../UserProfileScreen';
 import { useAuthStore } from '../../../features/auth/stores/useAuthStore';
+import { useLanguageStore } from '../../../core/i18n/useLanguageStore';
 
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'), useNavigation: () => ({navigate: mockNavigate}),
@@ -19,6 +20,7 @@ const navigation = {goBack:jest.fn(), navigate:jest.fn(), reset:jest.fn()} as an
 const showSettings = () => render(<SettingsScreen navigation={navigation} route={{name:'Settings'} as any}/>);
 beforeEach(() => {
   jest.clearAllMocks();
+  useLanguageStore.getState().setLanguage('en');
   useAuthStore.setState({user:{id:'settings-test',name:'Hippo Fan',email:'fan@example.com'},tokens:{accessToken:'session'},isAuthenticated:true,isLoading:false,signOut,deleteAccount,updateUsername});
   signOut.mockResolvedValue(undefined);
   deleteAccount.mockResolvedValue(undefined);
@@ -26,6 +28,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   jest.restoreAllMocks();
+  useLanguageStore.getState().setLanguage('en');
   useAuthStore.setState({signOut:actualSignOut,deleteAccount:actualDelete,updateUsername:actualUpdateUsername});
 });
 
@@ -134,4 +137,19 @@ it('keeps the confirmation screen and reports a failed deletion', async () => {
   fireEvent.press(screen.getByRole('button',{name:'Confirm delete account'}));
   await waitFor(() => expect(alert).toHaveBeenCalledWith('Could not delete account',expect.any(String)));
   expect(navigation.reset).not.toHaveBeenCalled();
+});
+
+it('opens language modal and switches language between English and Thai', () => {
+  showSettings();
+  expect(screen.getByText('Settings')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'Language' }));
+  expect(screen.getByText('Select Language')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'ไทย (Thai)' }));
+  expect(screen.getByText('การตั้งค่า')).toBeTruthy();
+  expect(screen.getByText('ภาษา (Language)')).toBeTruthy();
+
+  // Switch back to English
+  fireEvent.press(screen.getByRole('button', { name: 'ภาษา (Language)' }));
+  fireEvent.press(screen.getByRole('button', { name: 'English (US)' }));
+  expect(screen.getByText('Settings')).toBeTruthy();
 });

@@ -1,6 +1,16 @@
 import React from 'react';
 import Svg, { Ellipse, Circle, Path, G } from 'react-native-svg';
-import { Text, Pressable, StyleSheet, View } from 'react-native';
+import { Text, Pressable, StyleSheet, View, Platform } from 'react-native';
+
+export const typography = {
+  fontFamily: 'Kanit_400Regular',
+  regular: 'Kanit_400Regular',
+  medium: 'Kanit_500Medium',
+  semiBold: 'Kanit_600SemiBold',
+  bold: 'Kanit_700Bold',
+  extraBold: 'Kanit_800ExtraBold',
+};
+
 export const colors = {
   cream: '#FDF8F2',
   white: '#FFFFFF',
@@ -10,6 +20,7 @@ export const colors = {
   blush: '#FBE1DE',
   gold: '#EDB64E'
 };
+
 export const ui = StyleSheet.create({
   page: {
     flex: 1,
@@ -20,11 +31,12 @@ export const ui = StyleSheet.create({
     gap: 16
   },
   title: {
+    fontFamily: typography.extraBold,
     fontSize: 27,
-    fontWeight: '800',
     color: colors.ink
   },
   text: {
+    fontFamily: typography.regular,
     color: colors.ink,
     fontSize: 14,
     lineHeight: 21
@@ -62,11 +74,12 @@ export const ui = StyleSheet.create({
     alignItems: 'center'
   },
   buttonText: {
+    fontFamily: typography.bold,
     color: 'white',
-    fontWeight: '700',
     fontSize: 16
   }
 });
+
 export function Button({
   label,
   onPress,
@@ -82,6 +95,7 @@ export function Button({
     opacity: 0.5
   }]}><View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7}}>{icon}<Text style={ui.buttonText}>{label}</Text></View></Pressable>;
 }
+
 /** Shared vector mascot: independent of the device's emoji fonts. */
 export function HippoFigure() {
   return <G>

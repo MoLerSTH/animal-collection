@@ -93,6 +93,7 @@ export async function identifyAnimalApi(imageUri: string, token?: string): Promi
       ...(metadata.habitatTags !== undefined ? { habitatTags: metadata.habitatTags as HabitatTag[] } : {}),
     };
   } catch (error) {
+    console.warn('[Discovery] identifyAnimalApi failed:', error);
     if (controller.signal.aborted) {
       throw new AnimalAnalysisError('Animal analysis took too long. Please try again.');
     }

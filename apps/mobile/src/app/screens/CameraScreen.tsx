@@ -2,7 +2,7 @@ import { appStorage } from '../../core/storage/mmkv';
 import { analysisUsageApi, AnalysisUsage } from '../../features/discovery/api/analysisUsageApi';
 import AppIcon from '../components/AppIcon';
 import { CameraIcon, SearchIcon } from '../components/CatalogIcons';
-import { Hippo } from '../components/Design';
+import { Hippo, typography } from '../components/Design';
 import { identifyAnimalApi, AnimalAnalysisError } from '../../features/discovery/api/identifyAnimalApi';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -298,11 +298,11 @@ export default function CameraScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {!!usage && <Text style={{color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>AI remaining: {usage.remaining}/{usage.limit} · resets {new Date(usage.resetsAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok'})} TH</Text>}
-        {retrySeconds > 0 && <Text style={{color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>Try again in {retryLabel}</Text>}
+        {!!usage && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>AI remaining: {usage.remaining}/{usage.limit} · resets {new Date(usage.resetsAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok'})} TH</Text>}
+        {retrySeconds > 0 && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>Try again in {retryLabel}</Text>}
         {/* Shutter Button ด้านล่าง (ก่อนถึง Tab bar) */}
-        {capturing&&<View style={{alignSelf:'center',backgroundColor:'#00000099',borderRadius:24,padding:14,flexDirection:'row',gap:10}}><ActivityIndicator color="#E06D79"/><Text style={{color:'white'}}>AI Analyzing...</Text></View>}
-        {!!identified&&<View style={{alignSelf:'center',backgroundColor:'#FBE1DE',borderRadius:20,padding:10,flexDirection:'row',alignItems:'center',gap:6}}><Text>{identified}</Text>{/hippo/i.test(identified)&&<><AppIcon name="crown" size={18}/><Text>Legendary</Text></>}</View>}
+        {capturing&&<View style={{alignSelf:'center',backgroundColor:'#00000099',borderRadius:24,padding:14,flexDirection:'row',gap:10}}><ActivityIndicator color="#E06D79"/><Text style={{fontFamily: typography.semiBold, color:'white'}}>AI Analyzing...</Text></View>}
+        {!!identified&&<View style={{alignSelf:'center',backgroundColor:'#FBE1DE',borderRadius:20,padding:10,flexDirection:'row',alignItems:'center',gap:6}}><Text style={{fontFamily: typography.bold, color: '#4A3022'}}>{identified}</Text>{/hippo/i.test(identified)&&<><AppIcon name="crown" size={18}/><Text style={{fontFamily: typography.bold, color: '#4A3022'}}>Legendary</Text></>}</View>}
         <View style={styles.shutterArea}>
           <Pressable
             accessibilityRole="button"
@@ -368,15 +368,19 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   headerTitle: {
+    fontFamily: typography.extraBold,
     fontSize: 26,
-    fontWeight: '800',
+
     color: '#1C1917',
     letterSpacing: -0.5,
   },
   headerSubtitle: {
+
     marginTop: 2,
+
+    fontFamily: typography.regular,
     fontSize: 14,
-    fontWeight: '500',
+
     color: 'rgba(28, 25, 23, 0.65)',
   },
 
@@ -513,13 +517,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   permissionTitle: {
+    fontFamily: typography.bold,
     fontSize: 20,
-    fontWeight: '700',
+
     color: '#4A3022',
     marginBottom: 10,
     textAlign: 'center',
   },
   permissionText: {
+
+    fontFamily: typography.regular,
     fontSize: 14,
     lineHeight: 20,
     color: 'rgba(58, 46, 43, 0.7)',
@@ -539,12 +546,14 @@ const styles = StyleSheet.create({
   },
   permissionButtonText: {
     color: '#FFFFFF',
+    fontFamily: typography.semiBold,
     fontSize: 16,
-    fontWeight: '600',
+
   },
   permissionButtonTextSecondary: {
     color: '#4A3022',
+    fontFamily: typography.semiBold,
     fontSize: 16,
-    fontWeight: '600',
+
   },
 });

@@ -7,7 +7,7 @@ import { RootStackParamList } from '../navigation/types';
 import { appStorage } from '../../core/storage/mmkv';
 import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
-import { ui, Button, colors } from '../components/Design';
+import { ui, Button, colors, typography } from '../components/Design';
 import { TutorialArt, StarterGiftArt } from '../components/OnboardingArt';
 export default function OnboardingScreen({
   route,
@@ -76,18 +76,18 @@ const styles = StyleSheet.create({
   content: {flexGrow: 1, width: '100%', maxWidth: 460, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 18, gap: 18, justifyContent: 'space-between'},
   header: {alignItems: 'center', gap: 10},
   skip: {alignSelf: 'flex-end', paddingHorizontal: 3, paddingVertical: 8, minHeight: 36},
-  skipText: {fontSize: 13, fontWeight: '700', color: colors.ink},
-  title: {fontSize: 26, lineHeight: 30, fontWeight: '800', color: colors.ink, textAlign: 'center'},
-  subtitle: {fontSize: 13, lineHeight: 18, color: colors.ink, textAlign: 'center', paddingHorizontal: 4},
+  skipText: {fontFamily: typography.bold, fontSize: 13, color: colors.ink},
+  title: {fontFamily: typography.extraBold, fontSize: 26, lineHeight: 30, color: colors.ink, textAlign: 'center'},
+  subtitle: {fontFamily: typography.regular, fontSize: 13, lineHeight: 18, color: colors.ink, textAlign: 'center', paddingHorizontal: 4},
   steps: {flexDirection: 'row', alignItems: 'flex-start', gap: 5},
   step: {flex: 1, alignItems: 'center', gap: 4},
   stepNumber: {width: 23, height: 23, borderRadius: 12, backgroundColor: colors.pink, alignItems: 'center', justifyContent: 'center'},
-  stepNumberText: {fontSize: 14, lineHeight: 18, fontWeight: '800', color: 'white'},
-  stepLabel: {fontSize: 11, lineHeight: 15, fontWeight: '700', color: colors.ink, textAlign: 'center', minHeight: 32},
+  stepNumberText: {fontFamily: typography.extraBold, fontSize: 14, lineHeight: 18, color: 'white'},
+  stepLabel: {fontFamily: typography.bold, fontSize: 11, lineHeight: 15, color: colors.ink, textAlign: 'center', minHeight: 32},
   giftCard: {backgroundColor: '#FFFCF7', borderRadius: 24, borderWidth: 1, borderColor: '#F0DBC5', padding: 18, gap: 8, shadowColor: '#A77951', shadowOffset: {width: 0, height: 4}, shadowOpacity: .15, shadowRadius: 10, elevation: 4},
   close: {position: 'absolute', right: 12, top: 8, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', zIndex: 1},
   closeText: {fontSize: 24, color: '#845847', lineHeight: 27},
-  giftTitle: {fontSize: 25, lineHeight: 30, fontWeight: '800', color: colors.ink, textAlign: 'center'},
-  giftDescription: {fontSize: 12, lineHeight: 17, color: colors.ink, textAlign: 'center'},
-  error: {fontSize: 12, textAlign: 'center'},
+  giftTitle: {fontFamily: typography.extraBold, fontSize: 25, lineHeight: 30, color: colors.ink, textAlign: 'center'},
+  giftDescription: {fontFamily: typography.regular, fontSize: 12, lineHeight: 17, color: colors.ink, textAlign: 'center'},
+  error: {fontFamily: typography.semiBold, fontSize: 12, textAlign: 'center'},
 });

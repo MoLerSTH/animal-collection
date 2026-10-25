@@ -72,5 +72,6 @@ export const StorageKeys = {
   IS_DEV_MODE: 'is_dev_mode',
   COLLECTIONS_DATA: 'collections_data',
   CATALOG_DATA: 'catalog_data',
+  APP_LANGUAGE: 'app_language',
 } as const;
 

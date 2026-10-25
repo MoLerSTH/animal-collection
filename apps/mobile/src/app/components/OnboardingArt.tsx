@@ -2,7 +2,7 @@ import { PrivateImage as Image } from './PrivateImage';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg';
-import { colors, Hippo, HippoFigure } from './Design';
+import { colors, typography, Hippo, HippoFigure } from './Design';
 
 function Sparkle({x, y, size = 8}: {x: number; y: number; size?: number}) {
   return <Path d={`M${x} ${y-size} Q${x+1} ${y-1} ${x+size} ${y} Q${x+1} ${y+1} ${x} ${y+size} Q${x-1} ${y+1} ${x-size} ${y} Q${x-1} ${y-1} ${x} ${y-size}`} fill="#F2BD5C" />;
@@ -75,5 +75,5 @@ const styles = StyleSheet.create({
   photo: {width: '100%', aspectRatio: 1, borderRadius: 3, backgroundColor: '#F2E4CD'},
   photoFallback: {width: '100%', aspectRatio: 1, borderRadius: 3, backgroundColor: '#F2E4CD', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'},
   caption: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 5},
-  captionText: {fontSize: 8, fontWeight: '700', color: colors.ink, flexShrink: 1},
+  captionText: {fontFamily: typography.bold, fontSize: 8, color: colors.ink, flexShrink: 1},
 });
