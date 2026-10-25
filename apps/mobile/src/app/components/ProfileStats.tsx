@@ -17,7 +17,7 @@ export default function ProfileStats({animalsCollected, badgesUnlocked}: {
         </View>
         <View style={styles.text}>
           <Text style={styles.value}>{animalsCollected}</Text>
-          <Text style={styles.label}>{t.profile.animalsCollected}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.label}>{t.profile.animalsCollected}</Text>
         </View>
       </View>
       <View accessible accessibilityLabel={`${badgesUnlocked} ${t.profile.badgesUnlocked}`} style={styles.card}>
@@ -26,7 +26,7 @@ export default function ProfileStats({animalsCollected, badgesUnlocked}: {
         </View>
         <View style={styles.text}>
           <Text style={styles.value}>{badgesUnlocked}</Text>
-          <Text style={styles.label}>{t.profile.badgesUnlocked}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.label}>{t.profile.badgesUnlocked}</Text>
         </View>
       </View>
     </View>
@@ -43,16 +43,21 @@ const styles = StyleSheet.create({
     minHeight: 76,
     paddingHorizontal: 9,
     paddingVertical: 11,
-    backgroundColor: '#FFFBF5',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#F0E1CE',
-    borderRadius: 16,
+    borderColor: 'rgba(74, 48, 34, 0.08)',
+    borderRadius: 20,
+    shadowColor: '#4A3022',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   // The supplied PNGs have transparent margins. Display them slightly larger
   // inside a fixed frame so their visible artwork matches the design's scale.
   iconFrame: {width: 40, height: 46, alignItems: 'center', justifyContent: 'center', overflow: 'hidden'},
   icon: {width: 56, height: 56},
   text: {flex: 1, alignItems: 'center', gap: 3},
-  value: {fontSize: 18, lineHeight: 22, fontFamily: typography.extraBold, color: colors.ink, textAlign: 'center'},
-  label: {fontSize: 10, lineHeight: 14, fontFamily: typography.medium, color: colors.ink, textAlign: 'center'},
+  value: {fontSize: 20, lineHeight: 24, fontFamily: typography.extraBold, color: colors.ink, textAlign: 'center'},
+  label: {fontSize: 11, lineHeight: 15, fontFamily: typography.medium, color: '#8A7568', textAlign: 'center'},
 });
