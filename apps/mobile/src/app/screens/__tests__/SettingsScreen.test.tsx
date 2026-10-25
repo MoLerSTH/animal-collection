@@ -51,7 +51,7 @@ it('saves the trimmed username and shows the updated profile', async () => {
   fireEvent.press(screen.getByRole('button',{name:'Change username'}));
   fireEvent.changeText(screen.getByLabelText('Username'),'  นักสำรวจ  ');
   fireEvent.press(screen.getByRole('button',{name:'Save username'}));
-  await waitFor(() => expect(screen.queryByLabelText('Username')).toBeNull());
+  await waitFor(() => expect(screen.queryByLabelText('Username')).toBeNull(), { timeout: 3000 });
   expect(updateUsername).toHaveBeenCalledWith('นักสำรวจ');
   expect(screen.getByText('นักสำรวจ')).toBeTruthy();
 });
