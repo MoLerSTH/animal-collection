@@ -59,7 +59,7 @@ export default function BadgeMissionSheet({ badge, onClose, onCapture, onGallery
               </Pressable>
             </View>
             <View style={{ alignItems: 'center' }}>
-              <BadgeArtwork name={badge.name} locked={!badge.unlocked} />
+              <BadgeArtwork name={badge.name} locked={!badge.unlocked} size={92} />
             </View>
             <Text style={[ui.text, { textAlign: 'center', fontFamily: typography.bold, color: badge.unlocked ? '#708A49' : colors.pink }]}>
               {badge.unlocked ? m.unlockedStatus : m.lockedStatus}

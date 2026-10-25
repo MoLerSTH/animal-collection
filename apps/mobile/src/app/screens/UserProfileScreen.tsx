@@ -38,6 +38,7 @@ export default function UserProfileScreen() {
   const horizontalPadding = Math.max(16, Math.min(24, Math.floor(windowWidth * 0.045)));
   const availableGridWidth = Math.min(windowWidth - horizontalPadding * 2, maxContentWidth - horizontalPadding * 2);
   const itemWidth = Math.floor((availableGridWidth - (numColumns - 1) * gridGap) / numColumns);
+  const badgeIconSize = Math.min(58, Math.max(48, Math.floor(itemWidth * 0.52)));
 
   if (store.isLoading && store.collections.length === 0) {
     return (
@@ -129,9 +130,9 @@ export default function UserProfileScreen() {
                   ]}
                 >
                   <View style={styles.artworkFrame}>
-                    <BadgeArtwork name={badge.name} locked={!badge.unlocked} />
+                    <BadgeArtwork name={badge.name} locked={!badge.unlocked} size={badgeIconSize} />
                   </View>
-                  <Text style={styles.badgeName} numberOfLines={1}>
+                  <Text style={styles.badgeName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
                     {badge.name}
                   </Text>
                   <View
@@ -361,14 +362,17 @@ const styles = StyleSheet.create({
   badgeCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 10,
+    paddingTop: 12,
+    paddingBottom: 11,
+    paddingHorizontal: 8,
     alignItems: 'center',
     gap: 6,
     shadowColor: '#30180D',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 2,
+    overflow: 'hidden',
   },
   badgeCardUnlocked: {
     borderWidth: 1.5,
@@ -384,48 +388,58 @@ const styles = StyleSheet.create({
   },
   artworkFrame: {
     width: '100%',
-    height: 58,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   badgeName: {
     fontFamily: typography.semiBold,
-    fontSize: 11,
+    fontSize: 11.5,
+    lineHeight: 15,
     color: colors.ink,
     textAlign: 'center',
     width: '100%',
+    paddingHorizontal: 2,
+    marginTop: 2,
   },
   statusPill: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 8,
   },
   statusPillUnlocked: {
     backgroundColor: '#EDF5E5',
+    borderWidth: 1,
+    borderColor: '#D8ECC7',
   },
   statusPillLocked: {
     backgroundColor: '#F5EEE7',
+    borderWidth: 1,
+    borderColor: '#EAE1D7',
   },
   statusTextUnlocked: {
     fontFamily: typography.bold,
     fontSize: 9.5,
-    color: '#567232',
+    color: '#4B6A25',
   },
   statusTextLocked: {
     fontFamily: typography.medium,
     fontSize: 9.5,
-    color: '#917E72',
+    color: '#8A7568',
   },
   badgeProgressTrack: {
-    height: 4.5,
-    width: '100%',
-    borderRadius: 4,
+    height: 5,
+    width: '85%',
+    maxWidth: 76,
+    borderRadius: 5,
     backgroundColor: '#EFE4D8',
     overflow: 'hidden',
+    marginTop: 1,
   },
   badgeProgressFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
   },
   badgeCounterText: {
     fontFamily: typography.medium,
