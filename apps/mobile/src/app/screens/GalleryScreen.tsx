@@ -1,7 +1,7 @@
 import { PrivateImage as Image } from '../components/PrivateImage';
 import GalleryPhoto from '../components/GalleryPhoto';
 import React, { useEffect, useState } from 'react';
-import { View, Text, AppState, TextInput, ScrollView, Pressable, FlatList, StyleSheet } from 'react-native';
+import { View, Text, AppState, TextInput, ScrollView, Pressable, FlatList, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -70,6 +70,15 @@ export default function GalleryScreen(_props?: {
   const [location, setLocation] = useState('All Locations');
   const [giftError, setGiftError] = useState('');
 
+  const { width: windowWidth } = useWindowDimensions();
+  const maxContentWidth = 840;
+  const isTablet = windowWidth >= 600;
+  const numColumns = isTablet ? (windowWidth >= 900 ? 4 : 3) : 2;
+  const gridGap = 12;
+  const horizontalPadding = Math.max(16, Math.min(24, Math.floor(windowWidth * 0.045)));
+  const availableContentWidth = Math.min(windowWidth - horizontalPadding * 2, maxContentWidth - horizontalPadding * 2);
+  const cardWidth = Math.floor((availableContentWidth - (numColumns - 1) * gridGap) / numColumns);
+
   useEffect(() => { setGiftError(''); }, [userId]);
   const claimGift = () => {
     try {
@@ -111,11 +120,20 @@ export default function GalleryScreen(_props?: {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={ui.page}>
       <FlatList
+        key={`gallery-grid-${numColumns}`}
         data={visible}
-        numColumns={2}
+        numColumns={numColumns}
         keyExtractor={animal => animal.id}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.columns}
+        contentContainerStyle={[
+          styles.listContent,
+          {
+            paddingHorizontal: horizontalPadding,
+            maxWidth: maxContentWidth,
+            width: '100%',
+            alignSelf: 'center',
+          },
+        ]}
+        columnWrapperStyle={[styles.columns, { gap: gridGap }]}
         refreshing={store.isLoading}
         onRefresh={store.loadCollections}
         initialNumToRender={6}
@@ -125,7 +143,7 @@ export default function GalleryScreen(_props?: {
         ListHeaderComponent={
           <View style={styles.header}>
             {/* Top Title & Header Row */}
-            <View style={styles.titleRow}>
+            <View style={[styles.titleRow, isTablet && styles.titleRowTablet]}>
               <View>
                 <Text style={styles.screenHeading}>{t.gallery.heading}</Text>
                 <Text style={styles.screenSubtitle}>{t.gallery.subtitle}</Text>
@@ -198,8 +216,13 @@ export default function GalleryScreen(_props?: {
                     accessibilityRole="button"
                     accessibilityLabel={displayText}
                     accessibilityState={{selected: active}}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     onPress={() => setFilter(labelKey)}
-                    style={[styles.categoryPill, active && styles.activeCategoryPill]}
+                    style={({ pressed }) => [
+                      styles.categoryPill,
+                      active && styles.activeCategoryPill,
+                      pressed && styles.pillPressed,
+                    ]}
                   >
                     {labelKey === 'Favorites' && <HeartIcon size={13} color={active ? '#FFFFFF' : colors.pink}/>}
                     <Text style={[styles.categoryPillText, active && styles.activeCategoryPillText]}>{displayText}</Text>
@@ -221,8 +244,13 @@ export default function GalleryScreen(_props?: {
                       accessibilityRole="button"
                       accessibilityLabel={displayText}
                       accessibilityState={{selected: active}}
+                      hitSlop={{ top: 5, bottom: 5, left: 3, right: 3 }}
                       onPress={() => setLocation(locItem)}
-                      style={[styles.locationPill, active && styles.activeLocationPill]}
+                      style={({ pressed }) => [
+                        styles.locationPill,
+                        active && styles.activeLocationPill,
+                        pressed && styles.pillPressed,
+                      ]}
                     >
                       <LocationIcon size={13} color={active ? '#FFFFFF' : colors.pink}/>
                       <Text style={[styles.locationPillText, active && styles.activeLocationPillText]}>
@@ -240,7 +268,7 @@ export default function GalleryScreen(_props?: {
             accessibilityRole="button"
             accessibilityLabel={`View ${item.name}`}
             onPress={() => navigation.navigate('AnimalDetail', {animalId: item.id})}
-            style={({pressed}) => [styles.card, pressed && styles.cardPressed]}
+            style={({pressed}) => [styles.card, { width: cardWidth }, pressed && styles.cardPressed]}
           >
             {/* Photo Container */}
             <View style={styles.photoContainer}>
@@ -255,7 +283,7 @@ export default function GalleryScreen(_props?: {
                 ) : <View/>}
                 {item.isFavorite && (
                   <View style={styles.favoriteBadge}>
-                    <HeartIcon size={12} color="#FFFFFF"/>
+                    <HeartIcon size={13} color="#FFFFFF"/>
                   </View>
                 )}
               </View>
@@ -263,7 +291,7 @@ export default function GalleryScreen(_props?: {
 
             {/* Card Information */}
             <View style={styles.cardInfo}>
-              <Text numberOfLines={1} style={styles.animalName}>{item.name}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={styles.animalName}>{item.name}</Text>
               {item.syncStatus === 'pending' && (
                 <View style={styles.pendingBadge}>
                   <Text style={styles.pendingText}>{t.gallery.waitingToSync}</Text>
@@ -309,12 +337,11 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 24,
+    paddingBottom: 110,
     gap: 14,
   },
   columns: {
-    gap: 12,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   header: {
     gap: 12,
@@ -323,6 +350,11 @@ const styles = StyleSheet.create({
   titleRow: {
     gap: 10,
     marginBottom: 4,
+  },
+  titleRowTablet: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   screenHeading: {
     fontFamily: typography.extraBold,
@@ -334,7 +366,7 @@ const styles = StyleSheet.create({
   screenSubtitle: {
     fontFamily: typography.medium,
     fontSize: 13,
-    color: '#8A776A',
+    color: '#756254',
 
     marginTop: 2,
   },
@@ -461,7 +493,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    minHeight: 34,
+    minHeight: 38,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -497,12 +529,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    minHeight: 34,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderWidth: 1,
-    borderColor: 'rgba(74, 48, 34, 0.07)',
+    borderColor: 'rgba(74, 48, 34, 0.08)',
   },
   activeLocationPill: {
     backgroundColor: colors.pink,
@@ -519,20 +552,22 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
 
   },
+  pillPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.88,
+  },
   card: {
-    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(74, 48, 34, 0.06)',
+    borderColor: 'rgba(74, 48, 34, 0.07)',
     shadowColor: '#30180D',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 3,
-    maxWidth: '48.5%',
-    marginBottom: 2,
+    elevation: 2,
+    marginBottom: 4,
   },
   cardPressed: {
     opacity: 0.92,
@@ -554,10 +589,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   categoryBadge: {
-    backgroundColor: 'rgba(40, 24, 15, 0.6)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
+    backgroundColor: 'rgba(40, 24, 15, 0.65)',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
   },
   categoryBadgeText: {
     fontFamily: typography.bold,
@@ -569,9 +604,9 @@ const styles = StyleSheet.create({
   },
   favoriteBadge: {
     backgroundColor: colors.pink,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -581,14 +616,16 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardInfo: {
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
     gap: 4,
   },
   animalName: {
     fontFamily: typography.bold,
     color: colors.ink,
-    fontSize: 14,
-
+    fontSize: 14.5,
+    lineHeight: 19,
     letterSpacing: -0.2,
   },
   pendingBadge: {
@@ -613,7 +650,7 @@ const styles = StyleSheet.create({
   locationText: {
     fontFamily: typography.medium,
     flex: 1,
-    color: '#847367',
+    color: '#6E5D52',
     fontSize: 11,
 
   },
