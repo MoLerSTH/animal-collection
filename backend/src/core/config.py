@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = "password123"
     S3_BUCKET_NAME: str = "animal-photos"
 
+    # Gemini AI
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
+    AI_DAILY_QUOTA_PER_USER: int = 50
+    AI_MAX_IMAGE_SIZE_MB: int = 10
+
     # CORS
     CORS_ORIGINS: Union[str, List[str]] = "*"
 
@@ -44,4 +50,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
