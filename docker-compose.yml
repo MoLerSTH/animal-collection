@@ -32,7 +32,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: animal_minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
