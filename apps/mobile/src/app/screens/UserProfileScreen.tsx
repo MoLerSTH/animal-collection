@@ -187,7 +187,7 @@ export default function UserProfileScreen() {
           </View>
           <View style={styles.howToPlayTextWrapper}>
             <Text style={styles.howToPlayTitle}>{t.settings.howToPlay}</Text>
-            <Text style={styles.howToPlaySubtitle}>เรียนรู้คู่มือการสำรวจและสะสมการ์ดสัตว์</Text>
+            <Text style={styles.howToPlaySubtitle}>{t.settings.howToPlaySubtitle}</Text>
           </View>
           <AppIcon name="chevron-right" size={18} color="#A48E7E" />
         </Pressable>
