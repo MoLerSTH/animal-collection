@@ -225,7 +225,7 @@ export default function GalleryScreen(_props?: {
                     ]}
                   >
                     {labelKey === 'Favorites' && <HeartIcon size={13} color={active ? '#FFFFFF' : colors.pink}/>}
-                    <Text style={[styles.categoryPillText, active && styles.activeCategoryPillText]}>{displayText}</Text>
+                    <Text numberOfLines={1} textBreakStrategy="simple" style={[styles.categoryPillText, active && styles.activeCategoryPillText]}>{displayText}</Text>
                   </Pressable>
                 );
               })}
@@ -253,7 +253,7 @@ export default function GalleryScreen(_props?: {
                       ]}
                     >
                       <LocationIcon size={13} color={active ? '#FFFFFF' : colors.pink}/>
-                      <Text style={[styles.locationPillText, active && styles.activeLocationPillText]}>
+                      <Text numberOfLines={1} textBreakStrategy="simple" style={[styles.locationPillText, active && styles.activeLocationPillText]}>
                         {displayText}{locItem !== 'All Locations' ? ` (${count})` : ''}
                       </Text>
                     </Pressable>
@@ -512,7 +512,8 @@ const styles = StyleSheet.create({
     fontFamily: typography.semiBold,
     color: '#736155',
     fontSize: 12,
-
+    includeFontPadding: false,
+    paddingHorizontal: 2,
   },
   activeCategoryPillText: {
     fontFamily: typography.bold,
@@ -545,7 +546,8 @@ const styles = StyleSheet.create({
     fontFamily: typography.medium,
     color: '#6E5D52',
     fontSize: 11,
-
+    includeFontPadding: false,
+    paddingHorizontal: 2,
   },
   activeLocationPillText: {
     fontFamily: typography.bold,

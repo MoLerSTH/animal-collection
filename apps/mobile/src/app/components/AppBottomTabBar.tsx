@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,7 +30,7 @@ interface TabConfig {
 /**
  * Unified Design System Bottom Navigation Bar.
  * Used identically across all screens (Gallery, Catch, Profile, AnimalDetail)
- * with consistent hover states, zero layout jumping, and a single source of truth.
+ * with responsive layout, zero text clipping across languages, and consistent UX.
  */
 export default function AppBottomTabBar({
   state,
@@ -42,6 +42,10 @@ export default function AppBottomTabBar({
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const safeAreaInsets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
+  const isTablet = windowWidth >= 600;
+  const maxBarWidth = 640;
+
   const bottomInset = customInsets?.bottom ?? safeAreaInsets.bottom;
   const bottomPadding = Math.max(bottomInset, 10);
   const [localActiveTab, setLocalActiveTab] = React.useState<keyof MainTabParamList | undefined>(activeTab);
@@ -59,38 +63,97 @@ export default function AppBottomTabBar({
   ];
 
   return (
-    <View style={[styles.tabBar, { height: 60 + bottomPadding, paddingBottom: bottomPadding }]}>
-      {tabs.map((tab) => {
-        const isFocused = state
-          ? state.routes[state.index]?.name === tab.name
-          : (localActiveTab ?? activeTab) === tab.name;
+    <View style={styles.barWrapper} pointerEvents="box-none">
+      <View
+        style={[
+          styles.tabBar,
+          {
+            height: 60 + bottomPadding,
+            paddingBottom: bottomPadding,
+            maxWidth: isTablet ? maxBarWidth : '100%',
+            borderRadius: isTablet ? 28 : undefined,
+            borderBottomLeftRadius: isTablet ? 28 : 0,
+            borderBottomRightRadius: isTablet ? 28 : 0,
+            marginBottom: isTablet ? 12 : 0,
+          },
+        ]}
+      >
+        {tabs.map((tab) => {
+          const isFocused = state
+            ? state.routes[state.index]?.name === tab.name
+            : (localActiveTab ?? activeTab) === tab.name;
 
-        const handlePress = () => {
-          onTabPress?.(tab.name);
-          if (state && navigation) {
-            const route = state.routes.find((r: any) => r.name === tab.name);
-            if (route) {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
+          const handlePress = () => {
+            onTabPress?.(tab.name);
+            if (state && navigation) {
+              const route = state.routes.find((r: any) => r.name === tab.name);
+              if (route) {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                if (!isFocused && !event.defaultPrevented) {
+                  navigation.navigate(route.name);
+                }
+              }
+            } else {
+              setLocalActiveTab(tab.name);
+              if (tab.name === 'Gallery' && rootNav.canGoBack?.()) {
+                rootNav.goBack();
+              } else {
+                rootNav.navigate('MainTabs', { screen: tab.name });
               }
             }
-          } else {
-            setLocalActiveTab(tab.name);
-            if (tab.name === 'Gallery' && rootNav.canGoBack?.()) {
-              rootNav.goBack();
-            } else {
-              rootNav.navigate('MainTabs', { screen: tab.name });
-            }
-          }
-        };
+          };
 
-        // Render Hero Catch Button
-        if (tab.name === 'Catch') {
+          // Render Hero Catch Button
+          if (tab.name === 'Catch') {
+            return (
+              <Pressable
+                key={tab.name}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isFocused }}
+                accessibilityLabel={tab.accessibilityLabel}
+                onPress={handlePress}
+                hitSlop={{ top: 14, bottom: 6, left: 10, right: 10 }}
+                style={styles.catchTabContainer}
+              >
+                {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => {
+                  const isInteractive = pressed || Boolean(hovered);
+                  return (
+                    <View style={styles.catchButtonWrapper}>
+                      <View
+                        style={[
+                          styles.catchCircle,
+                          isFocused && styles.catchCircleFocused,
+                          isInteractive && styles.catchCircleInteractive,
+                        ]}
+                      >
+                        <CameraIcon color="#FFFFFF" size={26} />
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        textBreakStrategy="simple"
+                        style={[
+                          styles.catchLabel,
+                          isFocused
+                            ? styles.catchLabelActive
+                            : isInteractive
+                            ? styles.catchLabelInteractiveText
+                            : null,
+                        ]}
+                      >
+                        {tab.label}
+                      </Text>
+                    </View>
+                  );
+                }}
+              </Pressable>
+            );
+          }
+
+          // Render Standard Tabs (Gallery, Profile)
           return (
             <Pressable
               key={tab.name}
@@ -98,30 +161,29 @@ export default function AppBottomTabBar({
               accessibilityState={{ selected: isFocused }}
               accessibilityLabel={tab.accessibilityLabel}
               onPress={handlePress}
-              hitSlop={{ top: 14, bottom: 6, left: 10, right: 10 }}
-              style={styles.catchTabContainer}
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                styles.standardTabItem,
+                (pressed || Boolean(hovered)) && styles.standardTabItemHovered,
+              ]}
             >
               {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => {
                 const isInteractive = pressed || Boolean(hovered);
+                const iconColor = isFocused
+                  ? colors.pink
+                  : isInteractive
+                  ? colors.pink
+                  : 'rgba(74, 48, 34, 0.45)';
+
                 return (
-                  <View style={styles.catchButtonWrapper}>
-                    <View
-                      style={[
-                        styles.catchCircle,
-                        isFocused && styles.catchCircleFocused,
-                        isInteractive && styles.catchCircleInteractive,
-                      ]}
-                    >
-                      <CameraIcon color="#FFFFFF" size={26} />
-                    </View>
+                  <View style={styles.standardTabInner}>
+                    <TabIcon name={tab.name} color={iconColor} size={24} />
                     <Text
+                      numberOfLines={1}
+                      textBreakStrategy="simple"
                       style={[
-                        styles.catchLabel,
-                        isFocused
-                          ? styles.catchLabelActive
-                          : isInteractive
-                          ? styles.catchLabelInteractiveText
-                          : null,
+                        styles.standardTabLabel,
+                        isFocused && styles.standardTabLabelActive,
+                        !isFocused && isInteractive && styles.standardTabLabelHovered,
                       ]}
                     >
                       {tab.label}
@@ -131,53 +193,20 @@ export default function AppBottomTabBar({
               }}
             </Pressable>
           );
-        }
-
-        // Render Standard Tabs (Gallery, Profile)
-        return (
-          <Pressable
-            key={tab.name}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isFocused }}
-            accessibilityLabel={tab.accessibilityLabel}
-            onPress={handlePress}
-            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
-              styles.standardTabItem,
-              (pressed || Boolean(hovered)) && styles.standardTabItemHovered,
-            ]}
-          >
-            {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => {
-              const isInteractive = pressed || Boolean(hovered);
-              const iconColor = isFocused
-                ? colors.pink
-                : isInteractive
-                ? colors.pink
-                : 'rgba(74, 48, 34, 0.45)';
-
-              return (
-                <View style={styles.standardTabInner}>
-                  <TabIcon name={tab.name} color={iconColor} size={24} />
-                  <Text
-                    style={[
-                      styles.standardTabLabel,
-                      isFocused && styles.standardTabLabelActive,
-                      !isFocused && isInteractive && styles.standardTabLabelHovered,
-                    ]}
-                  >
-                    {tab.label}
-                  </Text>
-                </View>
-              );
-            }}
-          </Pressable>
-        );
-      })}
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  barWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
   tabBar: {
+    width: '100%',
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -210,7 +239,11 @@ const styles = StyleSheet.create({
   },
   standardTabLabel: {
     fontFamily: typography.medium,
-    fontSize: 11,
+    fontSize: 11.5,
+    lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+    includeFontPadding: false,
     color: 'rgba(74, 48, 34, 0.45)',
   },
   standardTabLabelActive: {
@@ -258,7 +291,11 @@ const styles = StyleSheet.create({
   },
   catchLabel: {
     fontFamily: typography.semiBold,
-    fontSize: 11,
+    fontSize: 11.5,
+    lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+    includeFontPadding: false,
     marginTop: 3,
     color: 'rgba(74, 48, 34, 0.5)',
   },
