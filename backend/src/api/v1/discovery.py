@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from src.core.config import settings
 from src.core.database import get_db
@@ -21,12 +22,36 @@ from src.services.ai_service import (
 router = APIRouter(prefix="/discovery", tags=["AI Discovery"])
 
 
-def get_daily_reset_time() -> tuple[datetime, int]:
-    """Returns the next midnight UTC datetime and seconds remaining until then."""
+def get_weekly_reset_time() -> tuple[datetime, int]:
+    """Returns the next Monday 00:00 UTC datetime and seconds remaining until then."""
     now = datetime.now(timezone.utc)
-    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    seconds_remaining = max(1, int((tomorrow - now).total_seconds()))
-    return tomorrow, seconds_remaining
+    days_ahead = 7 - now.weekday()
+    next_reset = (now + timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
+    seconds_remaining = max(1, int((next_reset - now).total_seconds()))
+    return next_reset, seconds_remaining
+
+
+def get_current_week_range() -> tuple[date, date]:
+    """Returns (start_date, end_date) representing Monday through Sunday of current UTC week."""
+    now = datetime.now(timezone.utc)
+    start_of_week = (now - timedelta(days=now.weekday())).date()
+    end_of_week = start_of_week + timedelta(days=6)
+    return start_of_week, end_of_week
+
+
+def get_user_weekly_usage(db: Session, user_id) -> int:
+    """Calculates total AI analyses used by user in the current week."""
+    start_of_week, end_of_week = get_current_week_range()
+    total = (
+        db.query(func.coalesce(func.sum(UserAnalysisUsage.count), 0))
+        .filter(
+            UserAnalysisUsage.user_id == user_id,
+            UserAnalysisUsage.usage_date >= start_of_week,
+            UserAnalysisUsage.usage_date <= end_of_week,
+        )
+        .scalar()
+    )
+    return int(total or 0)
 
 
 @router.get("/usage", response_model=AnalysisUsageResponse)
@@ -35,10 +60,10 @@ def get_analysis_usage(
     current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     """
-    Returns the daily AI analysis usage and remaining quota for the user.
+    Returns the weekly AI analysis usage and remaining quota for the user (default: 7 times/week).
     """
-    limit = settings.AI_DAILY_QUOTA_PER_USER
-    resets_at, _ = get_daily_reset_time()
+    limit = getattr(settings, "AI_WEEKLY_QUOTA_PER_USER", 7)
+    resets_at, _ = get_weekly_reset_time()
     resets_at_str = resets_at.isoformat()
 
     if not current_user:
@@ -49,16 +74,7 @@ def get_analysis_usage(
             resetsAt=resets_at_str,
         )
 
-    today = date.today()
-    record = (
-        db.query(UserAnalysisUsage)
-        .filter(
-            UserAnalysisUsage.user_id == current_user.id,
-            UserAnalysisUsage.usage_date == today,
-        )
-        .first()
-    )
-    used = record.count if record else 0
+    used = get_user_weekly_usage(db, current_user.id)
     remaining = max(0, limit - used)
 
     return AnalysisUsageResponse(
@@ -78,27 +94,21 @@ async def identify_animal(
     """
     Analyzes an animal photograph using Google Gemini Multimodal AI.
     Returns identification, species, classification, habitat tags, and a story.
+    Enforces a weekly rate limit (7 times per week).
     """
-    # 1. Quota check
+    # 1. Weekly quota check
     today = date.today()
-    resets_at, seconds_remaining = get_daily_reset_time()
+    resets_at, seconds_remaining = get_weekly_reset_time()
     resets_at_str = resets_at.isoformat()
 
-    usage_record = (
-        db.query(UserAnalysisUsage)
-        .filter(
-            UserAnalysisUsage.user_id == current_user.id,
-            UserAnalysisUsage.usage_date == today,
-        )
-        .first()
-    )
-    used_today = usage_record.count if usage_record else 0
+    used_this_week = get_user_weekly_usage(db, current_user.id)
+    limit = getattr(settings, "AI_WEEKLY_QUOTA_PER_USER", 7)
 
-    if used_today >= settings.AI_DAILY_QUOTA_PER_USER:
+    if used_this_week >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
-                "code": "user_daily_limit",
+                "code": "user_weekly_limit",
                 "retryAfterSeconds": seconds_remaining,
                 "resetsAt": resets_at_str,
             },
@@ -149,6 +159,14 @@ async def identify_animal(
 
     # 4. Increment usage quota on successful analysis
     try:
+        usage_record = (
+            db.query(UserAnalysisUsage)
+            .filter(
+                UserAnalysisUsage.user_id == current_user.id,
+                UserAnalysisUsage.usage_date == today,
+            )
+            .first()
+        )
         if not usage_record:
             usage_record = UserAnalysisUsage(
                 user_id=current_user.id,

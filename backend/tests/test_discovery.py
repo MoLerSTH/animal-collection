@@ -1,19 +1,21 @@
+from unittest.mock import patch
 import io
 import pytest
-from unittest.mock import patch, MagicMock
+import uuid
+from PIL import Image
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from PIL import Image
 
 from src.main import app
 from src.core.database import Base, get_db
 from src.services.auth_service import create_access_token
 from src.models.user import User
+from src.models.analysis_usage import UserAnalysisUsage
 
+# Use SQLite in-memory for testing discovery endpoints with StaticPool
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
@@ -30,15 +32,7 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
-
-
-def create_sample_jpeg() -> bytes:
-    buf = io.BytesIO()
-    img = Image.new("RGB", (50, 50), color="blue")
-    img.save(buf, format="JPEG")
-    return buf.getvalue()
 
 
 @pytest.fixture(autouse=True)
@@ -50,21 +44,29 @@ def setup_db():
     app.dependency_overrides.pop(get_db, None)
 
 
+def create_sample_jpeg():
+    file = io.BytesIO()
+    image = Image.new("RGB", (100, 100), color="blue")
+    image.save(file, "jpeg")
+    file.seek(0)
+    return file.read()
+
+
 @pytest.fixture
 def auth_headers():
     db = TestingSessionLocal()
-    user_id = "8237395d-2ff5-4539-80f6-79dcb1696009"
+    user_id = str(uuid.uuid4())
     user = User(
         id=user_id,
-        email="test_user@example.com",
-        name="Test Collector",
-        google_id="google_test_123",
+        email=f"test_{user_id[:8]}@example.com",
+        name="Test User",
+        google_id=f"google_{user_id[:8]}",
     )
     db.add(user)
     db.commit()
     db.close()
 
-    token = create_access_token(user_id, "test_user@example.com")
+    token = create_access_token(user_id, f"test_{user_id[:8]}@example.com")
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -73,8 +75,8 @@ def test_discovery_usage_unauthenticated():
     assert response.status_code == 200
     data = response.json()
     assert data["used"] == 0
-    assert data["limit"] == 50
-    assert data["remaining"] == 50
+    assert data["limit"] == 7
+    assert data["remaining"] == 7
     assert "resetsAt" in data
 
 
@@ -83,7 +85,8 @@ def test_discovery_usage_authenticated(auth_headers):
     assert response.status_code == 200
     data = response.json()
     assert data["used"] == 0
-    assert data["remaining"] == 50
+    assert data["limit"] == 7
+    assert data["remaining"] == 7
 
 
 def test_identify_animal_success(auth_headers):
@@ -110,7 +113,40 @@ def test_identify_animal_success(auth_headers):
     # Verify usage incremented
     usage_resp = client.get("/api/v1/discovery/usage", headers=auth_headers)
     assert usage_resp.json()["used"] == 1
-    assert usage_resp.json()["remaining"] == 49
+    assert usage_resp.json()["remaining"] == 6
+
+
+def test_identify_animal_weekly_rate_limit_exceeded(auth_headers):
+    fake_result = {
+        "found": True,
+        "species": "Otter",
+        "story": "A playful river otter.",
+        "animalType": "Mammal",
+        "habitatTags": ["aquatic"],
+    }
+
+    with patch("src.api.v1.discovery.ai_service.identify_animal", return_value=fake_result):
+        sample_img = create_sample_jpeg()
+        # For this user, execute 7 requests to reach quota
+        for _ in range(7):
+            files = {"file": ("test.jpg", sample_img, "image/jpeg")}
+            res = client.post("/api/v1/discovery/identify", files=files, headers=auth_headers)
+            assert res.status_code == 200
+
+        # Verify usage is now 7/7
+        usage_resp = client.get("/api/v1/discovery/usage", headers=auth_headers)
+        assert usage_resp.json()["used"] == 7
+        assert usage_resp.json()["remaining"] == 0
+
+        # 8th attempt must be rejected by weekly rate limit
+        files = {"file": ("test.jpg", sample_img, "image/jpeg")}
+        response = client.post("/api/v1/discovery/identify", files=files, headers=auth_headers)
+        assert response.status_code == 429
+        detail = response.json()["detail"]
+        assert detail["code"] == "user_weekly_limit"
+        assert "retryAfterSeconds" in detail
+        assert "resetsAt" in detail
+        assert "Retry-After" in response.headers
 
 
 def test_identify_animal_empty_file(auth_headers):

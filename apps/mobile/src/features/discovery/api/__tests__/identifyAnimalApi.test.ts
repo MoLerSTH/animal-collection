@@ -29,6 +29,16 @@ it('shows provider-day reset information without confusing it with personal allo
   });
 });
 
+it('shows user weekly allowance reset information accurately', async () => {
+  globalThis.fetch = jest.fn().mockResolvedValue({ok: false, status: 429,
+    json: async () => ({detail: {code: 'user_weekly_limit', retryAfterSeconds: 86400, resetsAt: '2026-11-02T00:00:00Z'}}),
+  });
+  await expect(identifyAnimalApi('file:///capture.jpg')).rejects.toMatchObject({
+    message: 'You have used this week’s analysis allowance (7 times per week).',
+    quota: {code: 'user_weekly_limit', retryAfterSeconds: 86400, resetsAt: '2026-11-02T00:00:00Z'},
+  });
+});
+
 it('uploads the captured photo with authentication and accepts an identified goldfish', async () => {
   const result = { found: true, species: 'Goldfish', story: 'A freshwater fish.', confidence: 0.96 };
   globalThis.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => result });

@@ -33,6 +33,7 @@ const quotaMessages: Record<string, string> = {
   service_busy: 'The analysis service is busy. Please wait a moment.',
   service_daily_limit: 'The analysis service has reached today’s limit.',
   user_daily_limit: 'You have used today’s analysis allowance.',
+  user_weekly_limit: 'You have used this week’s analysis allowance (7 times per week).',
   user_minute_limit: 'You are taking photos too quickly. Please wait a moment.',
 };
 

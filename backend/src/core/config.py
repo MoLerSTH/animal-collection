@@ -1,25 +1,27 @@
-from pydantic_settings import BaseSettings
-from typing import List, Union
 import json
+from typing import List, Union
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Animal Collection API"
+    # App
+    PROJECT_NAME: str = "Animal Collection Backend"
     ENVIRONMENT: str = "development"
-    
+    DEBUG: bool = True
+
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres123@postgres:5432/animal_db"
+    DATABASE_URL: str = "postgresql://postgres:postgres123@localhost:5432/animal_db"
 
-    # Google OAuth
-    GOOGLE_WEB_CLIENT_ID: str = "520693286792-2jv9gk463vfm37rvpvpjgg76dm3b17lh.apps.googleusercontent.com"
-
-    # JWT Authentication
+    # JWT
     JWT_SECRET: str = "animal_collection_super_secret_jwt_key_2026"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
 
-    # MinIO / S3 Storage
-    S3_ENDPOINT: str = "http://minio:9000"
+    # Google Auth
+    GOOGLE_WEB_CLIENT_ID: str = ""
+
+    # MinIO / S3
+    S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "admin"
     S3_SECRET_KEY: str = "password123"
     S3_BUCKET_NAME: str = "animal-photos"
@@ -27,7 +29,8 @@ class Settings(BaseSettings):
     # Gemini AI
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-flash-lite-latest"
-    AI_DAILY_QUOTA_PER_USER: int = 50
+    AI_WEEKLY_QUOTA_PER_USER: int = 7
+    AI_DAILY_QUOTA_PER_USER: int = 7
     AI_MAX_IMAGE_SIZE_MB: int = 10
 
     # CORS

@@ -178,7 +178,7 @@ export default function CameraScreen({ navigation }: Props) {
       setErrorMessage(analysisError instanceof Error ? analysisError.message : 'Animal analysis is unavailable. Please try again.');
       const quota = analysisError instanceof AnimalAnalysisError ? analysisError.quota : undefined;
       if (quota?.retryAfterSeconds) setRetryUntil(Date.now() + quota.retryAfterSeconds * 1000);
-      const dailyReset = quota?.code?.endsWith('_daily_limit') && quota.resetsAt;
+      const dailyReset = (quota?.code?.endsWith('_daily_limit') || quota?.code?.endsWith('_weekly_limit')) && quota.resetsAt;
       setErrorHint(expiredSession ? 'Sign in to connect your account to the analysis service.'
         : dailyReset ? `Try again after ${new Date(dailyReset).toLocaleString('en-GB', {timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})} Thailand time.`
         : quota?.code ? 'This rejected request did not use your daily allowance. Wait for the timer before trying again.'
@@ -298,7 +298,7 @@ export default function CameraScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {!!usage && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>AI remaining: {usage.remaining}/{usage.limit} · resets {new Date(usage.resetsAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok'})} TH</Text>}
+        {!!usage && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>AI remaining: {usage.remaining}/{usage.limit} · resets {new Date(usage.resetsAt).toLocaleString('en-GB', {weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok'})} TH</Text>}
         {retrySeconds > 0 && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>Try again in {retryLabel}</Text>}
         {/* Shutter Button ด้านล่าง (ก่อนถึง Tab bar) */}
         {capturing&&<View style={{alignSelf:'center',backgroundColor:'#00000099',borderRadius:24,padding:14,flexDirection:'row',gap:10}}><ActivityIndicator color="#E06D79"/><Text style={{fontFamily: typography.semiBold, color:'white'}}>AI Analyzing...</Text></View>}
