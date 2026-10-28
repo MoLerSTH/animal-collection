@@ -11,7 +11,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Animal Collection requires camera access to photograph animals."
       },
-      "bundleIdentifier": "com.animalcollection.app",
+      "bundleIdentifier": "com.thegentlemenofjuthathep.animalcollection",
       "buildNumber": "1"
     },
     "android": {
@@ -22,7 +22,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.animalcollection.app",
+      "package": "com.thegentlemenofjuthathep.animalcollection",
       "permissions": [
         "android.permission.CAMERA"
       ],
