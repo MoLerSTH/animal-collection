@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from src.services.storage_service import storage_service
+from src.core.security import validate_image_bytes
 from src.schemas.collection import PhotoUploadResponse
 from src.api.deps import get_current_user
 from src.models.user import User
@@ -28,6 +29,14 @@ async def upload_photo(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File size exceeds maximum allowed (20MB)",
+        )
+
+    try:
+        detected_mime = validate_image_bytes(file_bytes)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
 
     ext = "jpg"

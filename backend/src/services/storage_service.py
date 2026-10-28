@@ -7,6 +7,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from src.core.config import settings
+from src.core.security import sanitize_filename
 
 LOCAL_UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 
@@ -102,20 +103,30 @@ class StorageService:
     def get_photo_file(self, object_name: str) -> Optional[Tuple[io.BytesIO, str]]:
         """
         Retrieves image stream and content type.
+        Protects against Path Traversal by strictly sanitizing the object_name.
         """
+        clean_name = sanitize_filename(object_name)
+        if not clean_name:
+            return None
+
         # Determine content type from extension
-        ext = object_name.split(".")[-1].lower()
-        content_type = "image/png" if ext == "png" else "image/jpeg"
+        ext = clean_name.split(".")[-1].lower()
+        content_type = "image/png" if ext == "png" else ("image/webp" if ext == "webp" else "image/jpeg")
 
         # 1. Try local disk first if exists
-        local_path = LOCAL_UPLOAD_DIR / object_name
-        if local_path.exists():
-            return io.BytesIO(local_path.read_bytes()), content_type
+        try:
+            local_path = (LOCAL_UPLOAD_DIR / clean_name).resolve()
+            if not str(local_path).startswith(str(LOCAL_UPLOAD_DIR.resolve())):
+                return None
+            if local_path.is_file():
+                return io.BytesIO(local_path.read_bytes()), content_type
+        except Exception:
+            return None
 
         # 2. Try S3 if available
         if self.s3_available and self.s3_client:
             try:
-                resp = self.s3_client.get_object(Bucket=self.bucket_name, Key=object_name)
+                resp = self.s3_client.get_object(Bucket=self.bucket_name, Key=clean_name)
                 stream = io.BytesIO(resp["Body"].read())
                 return stream, resp.get("ContentType", content_type)
             except Exception:

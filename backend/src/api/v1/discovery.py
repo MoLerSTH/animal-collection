@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from src.core.config import settings
+from src.core.security import validate_image_bytes
 from src.core.database import get_db
 from src.api.deps import get_current_user, get_optional_current_user
 from src.models.user import User
@@ -129,6 +130,14 @@ async def identify_animal(
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"This photo is too large to analyze. Maximum size is {settings.AI_MAX_IMAGE_SIZE_MB}MB.",
+        )
+
+    try:
+        validate_image_bytes(image_bytes)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The analysis service could not read this photo format. Only JPEG, PNG, and WebP are allowed.",
         )
 
     # 3. Call AI Service

@@ -1,5 +1,6 @@
 import json
 from typing import List, Union
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -46,6 +47,17 @@ class Settings(BaseSettings):
             except Exception:
                 return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
         return self.CORS_ORIGINS
+
+    @model_validator(mode="after")
+    def validate_production_settings(self):
+        if self.ENVIRONMENT == "production":
+            self.DEBUG = False
+            if self.JWT_SECRET == "animal_collection_super_secret_jwt_key_2026":
+                raise ValueError("CRITICAL SECURITY ERROR: Default JWT_SECRET cannot be used in production! Generate a secure key via `openssl rand -hex 32`.")
+            if self.CORS_ORIGINS == "*":
+                import logging
+                logging.warning("[SECURITY WARNING] CORS_ORIGINS is set to '*' in production. Please restrict to specific app domains.")
+        return self
 
     class Config:
         env_file = ".env"

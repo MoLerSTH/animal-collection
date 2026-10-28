@@ -39,14 +39,29 @@ async def lifespan(app: FastAPI):
     # Shutdown logic if any
 
 
+is_production = settings.ENVIRONMENT == "production"
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     description="Backend API service for Animal Collection application (Google Auth, MinIO S3, PostgreSQL)",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json",
 )
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    if is_production:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Configure CORS
 app.add_middleware(
