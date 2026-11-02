@@ -139,11 +139,15 @@ class AIService:
         last_error = None
         response = None
 
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
         with httpx.Client(timeout=30.0) as client:
             for model_name in models_to_try:
                 url = f"{GEMINI_API_BASE}/models/{model_name}:generateContent?key={self.api_key}"
                 try:
-                    res = client.post(url, json=payload)
+                    res = client.post(url, json=payload, headers=headers)
                     if res.status_code == 200:
                         response = res
                         break
