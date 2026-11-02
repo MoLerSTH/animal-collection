@@ -28,7 +28,8 @@ export interface BackendAuthResponse {
 
 async function authRequest(path: string, init: RequestInit) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  // Allow up to 45s for free-tier backend cold starts (Render/Fly spin-up)
+  const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/${path}`, { ...init, signal: controller.signal });
     if (!response.ok) throw new AuthApiError(response.status);

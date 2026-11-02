@@ -28,9 +28,18 @@ export default function LoginScreen({ navigation }: Props) {
     try {
       if (await signInWithGoogle()) navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     } catch (err: any) {
-      if (err?.code !== 'SIGN_IN_CANCELLED' && err?.code !== '12501') {
-        Alert.alert('Sign-in unavailable', 'Could not connect your Google account to the app. Check your connection and try again.');
+      if (err?.code === 'SIGN_IN_CANCELLED' || err?.code === '12501') {
+        return;
       }
+      let detail = err?.message || 'Could not connect your Google account to the app.';
+      if (err?.code === '10' || err?.message?.includes('DEVELOPER_ERROR')) {
+        detail = 'Error 10 (DEVELOPER_ERROR): SHA-1 fingerprint หรือ Package Name ใน Google Cloud Console ไม่ตรงกับคีย์ของ Google Play Store';
+      } else if (err?.code === '12500' || err?.message?.includes('12500')) {
+        detail = 'Error 12500: ตรวจสอบ OAuth Consent Screen และสิทธิ์ Test Users ใน Google Cloud Console';
+      } else if (err?.code === 'SIGN_IN_TIMEOUT' || err?.name === 'AbortError') {
+        detail = 'การเชื่อมต่อหมดเวลา (เซิร์ฟเวอร์อาจกำลังเริ่มต้นระบบ) กรุณาลองใหม่อีกครั้ง';
+      }
+      Alert.alert('Sign-in Failed', detail + '\n\n(' + (err?.code || 'ERR') + ')');
     }
   };
 

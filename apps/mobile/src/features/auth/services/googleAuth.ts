@@ -85,10 +85,14 @@ export async function executeGoogleSignIn(): Promise<SignInResult> {
     configureGoogleSignin();
     const nativeSignInPromise = GoogleSigninModule.signIn();
 
-    // Timeout guard so the UI spinner NEVER hangs indefinitely
+    // Timeout guard: Allow up to 60s for user account selection, biometrics, and Play Services
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('GOOGLE_SIGNIN_TIMEOUT')), 10000);
+      timeoutId = setTimeout(() => {
+        const timeoutErr: any = new Error('Google Sign-In prompt timed out (60s). Please try again.');
+        timeoutErr.code = 'SIGN_IN_TIMEOUT';
+        reject(timeoutErr);
+      }, 60000);
     });
 
     const response: any = await Promise.race([nativeSignInPromise, timeoutPromise]).finally(() => {
