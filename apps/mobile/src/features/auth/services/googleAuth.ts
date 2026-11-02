@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { AuthTokens, AuthUser } from '../types';
 import { exchangeGoogleTokenWithBackend, requestBackendSession } from '../api/authApi';
+import { getApiBaseUrl } from '../../../core/api/config';
 
 let GoogleSigninModule: any = null;
 
@@ -167,6 +168,16 @@ export async function executeMockGoogleSignIn(selectedUserIndex = 0): Promise<Si
   // Keep the offline mock profile only when the development backend is unavailable.
   const backendResult = await exchangeGoogleTokenWithBackend(tokens.idToken!);
   if (backendResult) return { ...backendResult, isMock: true };
+
+  const apiBase = getApiBaseUrl();
+  if (apiBase.startsWith('https://') || (!apiBase.includes('localhost') && !apiBase.includes('10.0.2.2') && !apiBase.includes('127.0.0.1'))) {
+    console.warn(
+      `[Auth] Warning: Mock sign-in was used while targeting remote backend (${apiBase}). ` +
+      'Remote production backends will reject mock JWTs with 401 Unauthorized. ' +
+      'Please sign in with a real Google account.'
+    );
+  }
+
   return { user, tokens, isMock: true };
 }
 

@@ -78,3 +78,26 @@ def test_protected_route_without_token():
     response = client.get("/api/v1/auth/me")
     assert response.status_code == 403 or response.status_code == 401
 
+
+
+def test_protected_route_with_expired_token():
+    from datetime import timedelta
+    from src.services.auth_service import create_access_token
+    expired_token = create_access_token(user_id="test-user-id", email="test@example.com", expires_delta=timedelta(seconds=-10))
+    response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
+    assert response.status_code == 401
+    assert "expired" in response.json().get("detail", "").lower()
+
+
+def test_protected_route_with_invalid_token():
+    response = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer mock_jwt_access_token_1"})
+    assert response.status_code == 401
+    assert response.json().get("detail") == "Invalid or expired authentication token"
+
+
+def test_protected_route_with_nonexistent_user():
+    from src.services.auth_service import create_access_token
+    valid_token_ghost_user = create_access_token(user_id="nonexistent-user-uuid", email="ghost@example.com")
+    response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {valid_token_ghost_user}"})
+    assert response.status_code == 401
+    assert "not found" in response.json().get("detail", "").lower()

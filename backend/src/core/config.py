@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # JWT
     JWT_SECRET: str = "animal_collection_super_secret_jwt_key_2026"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days default for mobile apps
 
     # Google Auth
     GOOGLE_WEB_CLIENT_ID: str = ""

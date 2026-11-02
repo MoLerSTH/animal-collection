@@ -94,12 +94,27 @@ def create_access_token(user_id: str, email: str, expires_delta: Optional[timede
     return encoded_jwt
 
 
+def decode_access_token_with_reason(token: str) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Decodes and validates an application JWT token, returning (payload, failure_reason).
+    Failure reasons: 'token_expired', 'invalid_signature', 'malformed_token', 'token_decode_error'.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return payload, None
+    except jwt.ExpiredSignatureError:
+        return None, "token_expired"
+    except jwt.InvalidSignatureError:
+        return None, "invalid_signature"
+    except jwt.DecodeError:
+        return None, "malformed_token"
+    except jwt.PyJWTError as e:
+        return None, f"token_decode_error_{type(e).__name__}"
+
+
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     """
     Decodes and validates an application JWT token.
     """
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        return payload
-    except jwt.PyJWTError:
-        return None
+    payload, _ = decode_access_token_with_reason(token)
+    return payload

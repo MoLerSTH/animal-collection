@@ -78,7 +78,7 @@ it('opens Settings from the profile gear and displays the current account', () =
   showSettings();
   expect(screen.getByText('Hippo Fan')).toBeTruthy();
   expect(screen.getByText('fan@example.com')).toBeTruthy();
-  expect(screen.getByText('Version 1.0.0')).toBeTruthy();
+  expect(screen.getByText('Version 1.0.1')).toBeTruthy();
 });
 
 it('opens device settings and links to the privacy explanation', () => {

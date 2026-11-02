@@ -12,9 +12,11 @@ export interface AnimalIdentification {
 }
 
 export class AnimalAnalysisError extends Error {
+  public readonly isSessionExpired: boolean;
   constructor(message: string, public readonly status?: number,
     public readonly quota?: {code?: string; retryAfterSeconds?: number; resetsAt?: string}) {
     super(message);
+    this.isSessionExpired = status === 401 || status === 403;
   }
 }
 
