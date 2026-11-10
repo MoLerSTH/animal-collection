@@ -335,3 +335,33 @@ it('ignores an old claim response after a new account claims its own local gift'
   expect(appStorage.getString(giftServerKey('b'))).toBeUndefined();
   expect(readCollectionCache('b', [hippo]).collections[0].userId).toBe('b');
 });
+
+
+it('offers starter gift to a second mock account when backend entitlement check fails in dev/mock', async () => {
+  const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
+  jest.mocked(fetchCatalogApi).mockResolvedValue([hippo]);
+  jest.mocked(fetchUserCollectionsApi).mockResolvedValue([]);
+  // First account claims gift on device
+  markStarterGiftClaimed('a');
+  appStorage.set('starterGiftClaimed', 'true');
+  appStorage.set('starterGiftOwner', 'a');
+  appStorage.set(giftServerKey('a'), 'gift-a');
+  appStorage.set('hasSeenOnboarding', 'true');
+
+  // Switch to account 'b' with mock token, backend entitlement check is offline/rejected
+  useAuthStore.setState({ user: account('b'), tokens: { accessToken: 'mock_jwt_access_token_mock_user_bob' } });
+  jest.mocked(fetchStarterGiftStatusApi).mockRejectedValue(new Error('Offline / Mock fallback'));
+
+  await useCollectionStore.getState().loadCollections();
+  // Expect gift to be available to the second mock account on this device
+  expect(useCollectionStore.getState().starterGiftAvailable).toBe(true);
+
+  // Claim gift for second account
+  jest.mocked(claimStarterGiftApi).mockRejectedValue(new Error('Offline / Mock'));
+  useCollectionStore.getState().claimStarterGift();
+  expect(useCollectionStore.getState().starterGiftAvailable).toBe(false);
+  expect(useCollectionStore.getState().collections).toEqual([
+    expect.objectContaining({ userId: 'b', animalCode: 'hippopotamus' }),
+  ]);
+  expect(appStorage.getString(giftClaimedKey('b'))).toBe('true');
+});

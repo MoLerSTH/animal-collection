@@ -14,7 +14,7 @@ import { AnimalItem } from '../../../app/types';
 import { useAuthStore } from '../../auth/stores/useAuthStore';
 import { claimGuestCollections, readCollectionCache, writeCollectionCache } from './collectionCache';
 import { appStorage } from '../../../core/storage/mmkv';
-import { giftRemovedKey, giftServerKey, hasPendingStarterGift, isLocalStarterGift, LOCAL_STARTER_GIFT_ID, markStarterGiftClaimed, reconcileStarterGifts, restoreStarterGift } from './starterGift';
+import { giftClaimedKey, giftRemovedKey, giftServerKey, hasPendingStarterGift, isLocalStarterGift, LOCAL_STARTER_GIFT_ID, markStarterGiftClaimed, reconcileStarterGifts, restoreStarterGift } from './starterGift';
 import {
   fetchCatalogApi,
   fetchUserCollectionsApi,
@@ -225,7 +225,16 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     ]);
     if (version !== loadVersion || activeUserId() !== userId) return;
     const previous = get();
-    giftRemoved = giftRemoved || giftStatus === 'removed';
+    const isMockDevSession = typeof token === 'string' && token.startsWith('mock_jwt_');
+    const effectiveGiftStatus = giftStatus ?? (
+      isMockDevSession &&
+      !appStorage.getString(giftClaimedKey(userId)) &&
+      !appStorage.getString(giftServerKey(userId)) &&
+      !appStorage.getString(giftRemovedKey(userId))
+        ? 'available'
+        : null
+    );
+    giftRemoved = giftRemoved || effectiveGiftStatus === 'removed';
     // A rejected request is not an empty album. Preserve the entire last snapshot.
     let collections = collectionsData === null ? previous.collections : [
       ...collectionsData.filter(item => item.userId === userId).map(item => ({...item, syncStatus: 'synced' as const, localPhotoUri: previous.collections.find(local => local.id === item.id || local.clientRequestId === item.id)?.localPhotoUri, localId: previous.collections.find(local => local.id === item.id || local.clientRequestId === item.id)?.localId})),
@@ -244,7 +253,7 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     const catalog = collectionsData !== null && catalogData?.length ? catalogData : previous.catalog;
     const hasUnsyncedStarterGift = collections.some(item => isLocalStarterGift(item)) || hasPendingStarterGift(userId);
     set({ catalog, collections, isLoading: false,
-      starterGiftAvailable: giftStatus === 'available' && !hasPendingStarterGift(userId) &&
+      starterGiftAvailable: effectiveGiftStatus === 'available' && !hasPendingStarterGift(userId) &&
         !appStorage.getString(giftServerKey(userId)) && !appStorage.getString(giftRemovedKey(userId)) &&
         !collections.some(item => isLocalStarterGift(item) || item.source === 'starter_gift'),
       loadError: collectionsData === null ? 'Could not sync your album. Saved discoveries are still available. Pull down to retry.'
