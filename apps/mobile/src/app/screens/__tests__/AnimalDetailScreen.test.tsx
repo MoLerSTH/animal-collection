@@ -239,3 +239,34 @@ it('saves without coordinates if optional GPS does not respond within five secon
     expect(add.mock.calls[0][0].latitude).toBeUndefined();
   } finally { jest.useRealTimers(); }
 });
+
+it('edits and saves field notes on an existing card', async () => {
+  const updateStory = jest.fn().mockImplementation(async (id, story) => {
+    useCollectionStore.setState(state => ({
+      collections: state.collections.map(item => item.id === id ? { ...item, story } : item),
+    }));
+  });
+  useCollectionStore.setState({ updateStory } as any);
+  render(<AnimalDetailScreen navigation={nav} route={{ params: { animalId: 'a1' } } as any} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Edit field notes' }));
+  fireEvent.changeText(screen.getByLabelText('Animal story'), 'Found swimming happily');
+  fireEvent.press(screen.getByRole('button', { name: 'Save field notes' }));
+  await waitFor(() => expect(updateStory).toHaveBeenCalledWith('a1', 'Found swimming happily'));
+  expect(screen.getByText('Found swimming happily')).toBeTruthy();
+});
+
+it('confirms and deletes an existing collection card then navigates back', async () => {
+  const { Alert } = require('react-native');
+  const alertSpy = jest.spyOn(Alert, 'alert');
+  const deleteCollection = jest.fn().mockResolvedValue(undefined);
+  useCollectionStore.setState({ deleteCollection } as any);
+  render(<AnimalDetailScreen navigation={nav} route={{ params: { animalId: 'a1' } } as any} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Delete from collection' }));
+  expect(alertSpy).toHaveBeenCalled();
+  const buttons = alertSpy.mock.calls[0][2] as any[];
+  await act(async () => {
+    await buttons.find((b: any) => b.style === 'destructive')!.onPress!();
+  });
+  expect(deleteCollection).toHaveBeenCalledWith('a1');
+  expect(nav.goBack).toHaveBeenCalled();
+});

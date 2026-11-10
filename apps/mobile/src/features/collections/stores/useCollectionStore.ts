@@ -28,6 +28,7 @@ import {
   claimStarterGiftApi,
   StarterGiftClaimError,
   fetchStarterGiftStatusApi,
+  deleteCollectionApi,
 } from '../api/collectionApi';
 
 export const INITIAL_CATALOG_FALLBACK: CatalogAnimal[] = [
@@ -152,6 +153,8 @@ export interface CollectionState {
   }) => Promise<UserCollectionItem>;
   updateIdentification: (id: string, facts: Omit<IdentificationFacts, 'source' | 'capturedAt'>) => Promise<void>;
   renameCollection: (id: string, name: string) => Promise<void>;
+  updateStory: (id: string, story: string) => Promise<void>;
+  deleteCollection: (id: string) => Promise<void>;
   toggleFavorite: (collectionOrAnimalId: string) => Promise<void>;
   getGalleryGrid: () => AnimalItem[];
   getAnimalById: (id: string) => AnimalItem | undefined;
@@ -404,32 +407,124 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
 
   updateIdentification: async (id, facts) => {
     const userId = activeUserId();
-    const target = get().collections.find(item => item.id === id);
+    let target = get().collections.find(item => item.id === id || item.localId === id);
     if (get().isSyncing) throw new Error('Please wait for synchronization.');
     if (!target) throw new Error('Collection not found.');
     if (pendingNameFor(get().pendingNames, target) !== undefined) throw new Error('Please wait for the name to finish saving.');
+
+    if (isLocalStarterGift(target) && userId !== 'local_user') {
+      try {
+        const gift = await claimStarterGiftApi(true);
+        if (gift) {
+          target = { ...gift, localId: target.id };
+          set(state => ({ collections: state.collections.map(item => item.id === target!.localId ? target! : item) }));
+          appStorage.set(giftServerKey(userId), gift.id);
+        }
+      } catch (error) {
+        if (error instanceof StarterGiftClaimError && error.status === 410) {
+          appStorage.set(giftRemovedKey(userId), 'true');
+          set(state => ({ collections: state.collections.filter(item => item.id !== target!.id) }));
+          throw new Error('This starter gift was deleted from your account.');
+        }
+        throw error;
+      }
+    }
+
     const identifiedSpecies = facts.identifiedSpecies || target.identifiedSpecies || target.animalSpecies;
     const matching = get().catalog.find(item => item.name.toLowerCase() === identifiedSpecies.toLowerCase());
     const oldSpecies = target.identifiedSpecies || target.animalSpecies;
     const followsSpecies = (target.animalId || target.animalType && target.animalType !== 'Unknown') &&
       target.name.trim().toLowerCase() === oldSpecies.trim().toLowerCase();
     const name = followsSpecies ? identifiedSpecies : target.name;
-    const updated = id.startsWith('local_coll_') ? { ...target, ...facts, animalSpecies: identifiedSpecies,
+    const updated = target.id.startsWith('local_coll_') ? { ...target, ...facts, animalSpecies: identifiedSpecies,
       name, animalId: matching?.id, animalCode: matching?.code, category: matching?.category || 'Wild' }
-      : {...target, ...await updateCollectionApi(id, facts, useAuthStore.getState().tokens?.accessToken)};
+      : {...target, ...await updateCollectionApi(target.id, { ...facts, name, animalId: matching?.id }, useAuthStore.getState().tokens?.accessToken)};
     if (activeUserId() !== userId) throw new Error('The account changed. Please try again.');
     loadVersion += 1; // A profile/album fetch started before this edit is stale.
     set(state => {
-      const collections = state.collections.map(item => item.id === id ? updated : item);
+      const collections = state.collections.map(item => item.id === target!.id || item.localId === target!.id ? updated : item);
       const catalog = state.catalog.map(animal => {
         const matches = collections.filter(item => item.animalId === animal.id || item.animalCode === animal.code ||
           (item.identifiedSpecies || item.animalSpecies).toLowerCase() === animal.name.toLowerCase());
         return {...animal, isCaught: matches.length > 0, caughtCount: matches.length,
           userPhotoUrl: matches[0]?.photoUrl || null, isFavorite: matches.some(item => item.isFavorite)};
       });
+      const nonGiftSpecies = new Set(
+        collections
+          .filter(item => item.source !== 'starter_gift')
+          .map(item => (item.identifiedSpecies || item.animalSpecies).trim().toLowerCase())
+      );
+      const giftCount = collections.filter(item => item.source === 'starter_gift').length;
       return { collections, catalog, isLoading: false, summary: {...state.summary,
-        caughtCount: new Set(collections.map(item => (item.identifiedSpecies || item.animalSpecies).trim().toLowerCase())).size} };
+        caughtCount: nonGiftSpecies.size + giftCount} };
     });
+    writeCollectionCache(userId, get());
+  },
+
+  updateStory: async (id: string, story: string) => {
+    const userId = activeUserId();
+    const trimmed = story.trim();
+    let target = get().collections.find(item => item.id === id || item.localId === id);
+    if (!target || target.userId !== userId) throw new Error('Collection not found.');
+    if (target.story === trimmed) return;
+
+    if (!target.id.startsWith('local_coll_')) {
+      const token = useAuthStore.getState().tokens?.accessToken;
+      await updateCollectionApi(target.id, { story: trimmed }, token);
+    }
+    const updated = { ...target, story: trimmed };
+    set(state => ({
+      collections: state.collections.map(item => item.id === target!.id || item.localId === target!.id ? updated : item),
+    }));
+    writeCollectionCache(userId, get());
+  },
+
+  deleteCollection: async (id: string) => {
+    const userId = activeUserId();
+    const target = get().collections.find(item => item.id === id || item.localId === id);
+    if (!target || target.userId !== userId) throw new Error('Collection not found.');
+
+    const isGift = isLocalStarterGift(target) || target.source === 'starter_gift' || target.id === appStorage.getString(giftServerKey(userId));
+
+    if (!target.id.startsWith('local_coll_')) {
+      const token = useAuthStore.getState().tokens?.accessToken;
+      await deleteCollectionApi(target.id, token);
+    }
+
+    if (isGift) {
+      appStorage.set(giftRemovedKey(userId), 'true');
+      appStorage.delete(giftServerKey(userId));
+    }
+
+    const remainingCollections = get().collections.filter(item => item.id !== target!.id && item.localId !== target!.id);
+    const catalog = get().catalog.map(animal => {
+      const matches = remainingCollections.filter(item => item.animalId === animal.id || item.animalCode === animal.code ||
+        (item.identifiedSpecies || item.animalSpecies).toLowerCase() === animal.name.toLowerCase());
+      return {
+        ...animal,
+        isCaught: matches.length > 0,
+        caughtCount: matches.length,
+        userPhotoUrl: matches[0]?.photoUrl || null,
+        isFavorite: matches.some(item => item.isFavorite),
+      };
+    });
+
+    const nonGiftSpecies = new Set(
+      remainingCollections
+        .filter(item => item.source !== 'starter_gift')
+        .map(item => (item.identifiedSpecies || item.animalSpecies).trim().toLowerCase())
+    );
+    const giftCount = remainingCollections.filter(item => item.source === 'starter_gift').length;
+
+    set(state => ({
+      collections: remainingCollections,
+      catalog,
+      summary: {
+        ...state.summary,
+        caughtCount: nonGiftSpecies.size + giftCount,
+        favoritesCount: remainingCollections.filter(item => item.isFavorite).length,
+      },
+    }));
     writeCollectionCache(userId, get());
   },
 

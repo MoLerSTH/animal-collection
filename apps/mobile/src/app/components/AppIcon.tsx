@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg';
 
-export type AppIconName = 'back' | 'chevron-right' | 'close' | 'calendar' | 'book' | 'crown' | 'share' | 'sprout' | 'help' | 'flash' | 'switch-camera' | 'tools' | 'edit' | 'paw' | 'sparkles' | 'settings' | 'logout' | 'mail' | 'check' | 'lock';
+export type AppIconName = 'back' | 'chevron-right' | 'close' | 'calendar' | 'book' | 'crown' | 'share' | 'sprout' | 'help' | 'flash' | 'switch-camera' | 'tools' | 'edit' | 'paw' | 'sparkles' | 'settings' | 'logout' | 'mail' | 'check' | 'lock' | 'trash';
 
 export default function AppIcon({name, size = 22, color = '#4A3022'}: {name: AppIconName; size?: number; color?: string}) {
   const stroke = {stroke: color, strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const};
@@ -54,6 +54,10 @@ export default function AppIcon({name, size = 22, color = '#4A3022'}: {name: App
     </>; break;
     case 'edit': artwork = <>
       <Path d="M4 16 L16 4 L20 8 L8 20 L3 21Z M14 6 L18 10" {...stroke}/>
+    </>; break;
+    case 'trash': artwork = <>
+      <Path d="M3 6 H21 M19 6 V20 A2 2 0 0 1 17 22 H7 A2 2 0 0 1 5 20 V6 M8 6 V4 A2 2 0 0 1 10 2 H14 A2 2 0 0 1 16 4 V6" {...stroke}/>
+      <Path d="M10 11 V17 M14 11 V17" {...stroke}/>
     </>; break;
     case 'tools': artwork = <>
       <Path d="M13 4 A6 6 0 0 0 6 11 L2 17 Q0 21 4 22 Q6 22 7 19 L12 13 A6 6 0 0 0 20 5 L16 9 L12 7Z" {...stroke}/>

@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, { Ellipse, Circle, Path, G } from 'react-native-svg';
-import { Text, Pressable, StyleSheet, View, Platform } from 'react-native';
+import { Text, Pressable, StyleSheet, View, Platform, StyleProp, ViewStyle, TextStyle } from 'react-native';
 
 export const typography = {
   fontFamily: 'Kanit_400Regular',
@@ -84,16 +84,41 @@ export function Button({
   label,
   onPress,
   disabled = false,
-  icon
+  icon,
+  variant,
+  accessibilityLabel,
+  style,
+  textStyle,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   icon?: React.ReactNode;
+  variant?: 'solid' | 'outline' | string;
+  accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }) {
-  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[ui.button, disabled && {
-    opacity: 0.5
-  }]}><View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7}}>{icon}<Text style={ui.buttonText}>{label}</Text></View></Pressable>;
+  const isOutline = variant === 'outline';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || label}
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        ui.button,
+        isOutline && { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.pink },
+        style,
+        disabled && { opacity: 0.5 },
+      ]}
+    >
+      <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7}}>
+        {icon}
+        <Text style={[ui.buttonText, isOutline && { color: colors.pink }, textStyle]}>{label}</Text>
+      </View>
+    </Pressable>
+  );
 }
 
 /** Shared vector mascot: independent of the device's emoji fonts. */

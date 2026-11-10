@@ -48,6 +48,10 @@ function AnimalDetailContent({
   const [animalType, setAnimalType] = useState<AnimalType>(existing?.animalType || route.params.animalType || 'Unknown');
   const [tags, setTags] = useState<HabitatTag[]>(existing?.habitatTags || route.params.habitatTags || []);
   const [editingIdentification, setEditingIdentification] = useState(false);
+  const [editingStory, setEditingStory] = useState(false);
+  const [storyDraft, setStoryDraft] = useState(existing?.story || '');
+  const [savingStory, setSavingStory] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [story, setStory] = useState(existing?.story || route.params.identifiedStory || '');
   const [error, setError] = useState('');
   const [newBadge, setNewBadge] = useState(false);
@@ -420,22 +424,65 @@ function AnimalDetailContent({
 
         {/* Field Notes & Story Card */}
         <View style={styles.fieldNotesCard}>
-          <View style={styles.fieldNotesHeader}>
-            <AppIcon name="book" size={20} color="#8A6753" />
-            <Text style={styles.fieldNotesTitle}>{t.detail.fieldNotes}</Text>
+          <View style={[styles.fieldNotesHeader, {justifyContent: 'space-between', alignItems: 'center', width: '100%'}]}>
+            <View style={ui.row}>
+              <AppIcon name="book" size={20} color="#8A6753" />
+              <Text style={styles.fieldNotesTitle}>{t.detail.fieldNotes}</Text>
+            </View>
+            {existing && !existing.isLocked && !editingStory && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t.detail.editFieldNotes}
+                onPress={() => {
+                  setStoryDraft(existing.story || '');
+                  setEditingStory(true);
+                }}
+                hitSlop={8}
+              >
+                <AppIcon name="edit" size={18} color="#8A6753" />
+              </Pressable>
+            )}
           </View>
-          {existing ? (
+          {existing && !editingStory ? (
             <Text style={styles.storyText}>{existing.story || t.detail.defaultStory}</Text>
           ) : (
             <TextInput
               accessibilityLabel="Animal story"
               multiline
-              value={story}
-              onChangeText={setStory}
+              value={editingStory ? storyDraft : story}
+              onChangeText={editingStory ? setStoryDraft : setStory}
               placeholder={t.detail.fieldNotesPlaceholder}
               placeholderTextColor="#A89B90"
               style={styles.storyInput}
             />
+          )}
+          {editingStory && (
+            <View style={[ui.row, {marginTop: 10, justifyContent: 'flex-end', gap: 8}]}>
+              <Button
+                label={t.detail.cancelFieldNotes}
+                variant="outline"
+                disabled={savingStory}
+                onPress={() => setEditingStory(false)}
+              />
+              <Button
+                label={savingStory ? t.detail.saving : t.detail.saveFieldNotes}
+                disabled={savingStory}
+                accessibilityLabel={t.detail.saveFieldNotes}
+                onPress={async () => {
+                  const targetId = savedRecord?.id || existing?.id;
+                  if (!targetId) return;
+                  setSavingStory(true);
+                  try {
+                    await store.updateStory(targetId, storyDraft);
+                    setEditingStory(false);
+                  } catch (e: any) {
+                    Alert.alert('Error', e?.message || 'Could not save field notes');
+                  } finally {
+                    setSavingStory(false);
+                  }
+                }}
+              />
+            </View>
           )}
         </View>
 
@@ -480,6 +527,44 @@ function AnimalDetailContent({
               disabled={store.isSyncing}
               onPress={() => {
                 void store.toggleFavorite(existing.id).catch(err => Alert.alert('Could not save favorite', err.message));
+              }}
+            />
+          )}
+
+          {existing && !existing.isLocked && (
+            <Button
+              label={isDeleting ? t.detail.deleting : t.detail.deleteCard}
+              icon={<AppIcon name="trash" color="#D32F2F" size={18}/>}
+              variant="outline"
+              disabled={isDeleting || store.isSyncing}
+              accessibilityLabel={t.detail.deleteCard}
+              style={{borderColor: '#FFCDD2', marginTop: 10}}
+              textStyle={{color: '#D32F2F'}}
+              onPress={() => {
+                Alert.alert(
+                  t.detail.deleteConfirmTitle,
+                  t.detail.deleteConfirmMessage,
+                  [
+                    { text: t.detail.cancelFieldNotes, style: 'cancel' },
+                    {
+                      text: t.detail.deleteCard,
+                      style: 'destructive',
+                      onPress: async () => {
+                        const targetId = savedRecord?.id || existing?.id;
+                        if (!targetId) return;
+                        setIsDeleting(true);
+                        try {
+                          await store.deleteCollection(targetId);
+                          navigation.goBack();
+                        } catch (err: any) {
+                          Alert.alert('Could not delete card', err.message);
+                        } finally {
+                          setIsDeleting(false);
+                        }
+                      },
+                    },
+                  ],
+                );
               }}
             />
           )}

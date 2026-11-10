@@ -179,3 +179,31 @@ it('confirms a pending gift before renaming and keeps the original screen lookup
   expect(useCollectionStore.getState().collections).toHaveLength(1);
   expect(useCollectionStore.getState().getAnimalById(localId)?.name).toBe('หมูเด้ง');
 });
+
+it('deletes a collection entry, updates catalog/summary, and persists to cache', async () => {
+  const api = require('../../api/collectionApi');
+  const deleteSpy = jest.spyOn(api, 'deleteCollectionApi').mockResolvedValue(true);
+  await useCollectionStore.getState().deleteCollection(fish.id);
+  expect(deleteSpy).toHaveBeenCalledWith(fish.id, 'session');
+  expect(useCollectionStore.getState().collections).toHaveLength(0);
+  expect(readCollectionCache(user.id, []).collections).toHaveLength(0);
+});
+
+it('marks starter gift as removed when deleting a starter gift card so it does not return', async () => {
+  const api = require('../../api/collectionApi');
+  jest.spyOn(api, 'deleteCollectionApi').mockResolvedValue(true);
+  const gift: UserCollectionItem = { ...fish, id: 'server-gift', source: 'starter_gift', animalCode: 'hippopotamus' };
+  useCollectionStore.setState({ collections: [gift] });
+  await useCollectionStore.getState().deleteCollection('server-gift');
+  expect(appStorage.getString('starter_gift_removed:' + user.id)).toBe('true');
+  expect(useCollectionStore.getState().collections).toHaveLength(0);
+});
+
+it('updates story on an existing collection entry and persists it to cache', async () => {
+  const api = require('../../api/collectionApi');
+  const updateSpy = jest.spyOn(api, 'updateCollectionApi').mockResolvedValue({ ...fish, story: 'Updated field notes' });
+  await useCollectionStore.getState().updateStory(fish.id, '  Updated field notes  ');
+  expect(updateSpy).toHaveBeenCalledWith(fish.id, { story: 'Updated field notes' }, 'session');
+  expect(useCollectionStore.getState().collections[0].story).toBe('Updated field notes');
+  expect(readCollectionCache(user.id, []).collections[0].story).toBe('Updated field notes');
+});

@@ -154,6 +154,49 @@ class TestBackendCollections(unittest.TestCase):
         get_resp = client.get(f"/api/v1/collections/{collection_id}", headers=self.headers)
         self.assertEqual(get_resp.status_code, 404)
 
+    def test_rename_and_update_identification_fields(self):
+        create_resp = client.post(
+            "/api/v1/collections",
+            json={
+                "clientRequestId": "12345678-1234-4234-8234-123456789abc",
+                "name": "Mystery Pet",
+                "photoUrl": "https://example.com/pet.jpg",
+                "identifiedSpecies": "Goldfish",
+                "animalType": "Fish",
+                "habitatTags": ["aquatic"],
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        card_id = create_resp.json()["id"]
+
+        # Rename via PATCH /collections/{id}/name
+        rename_resp = client.patch(
+            f"/api/v1/collections/{card_id}/name",
+            json={"name": "ปลาอ้วน"},
+            headers=self.headers,
+        )
+        self.assertEqual(rename_resp.status_code, 200)
+        self.assertEqual(rename_resp.json(), {"id": card_id, "name": "ปลาอ้วน"})
+
+        # Update identification and story via PATCH /collections/{id}
+        patch_resp = client.patch(
+            f"/api/v1/collections/{card_id}",
+            json={
+                "identifiedSpecies": "Koi",
+                "animalType": "Fish",
+                "habitatTags": ["aquatic"],
+                "story": "Updated story",
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(patch_resp.status_code, 200)
+        updated = patch_resp.json()
+        self.assertEqual(updated["identifiedSpecies"], "Koi")
+        self.assertEqual(updated["animalType"], "Fish")
+        self.assertEqual(updated["habitatTags"], ["aquatic"])
+        self.assertEqual(updated["story"], "Updated story")
+
     def test_starter_gift_endpoints_and_idempotency(self):
         # 1. Initial status is 'available'
         status_resp = client.get("/api/v1/collections/starter-gift", headers=self.headers)
