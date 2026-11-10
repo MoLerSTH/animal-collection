@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
+import { useCollectionStore, countDiscovered } from '../../features/collections/stores/useCollectionStore';
 import { AnimalItem } from '../types';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
 import { useTranslation } from '../../core/i18n/useLanguageStore';
@@ -115,7 +115,7 @@ export default function GalleryScreen(_props?: {
     (filter === 'All' || (filter === 'Favorites' && a.isFavorite) || animalType(a) === filter) &&
     (isAllLocations || locationForAnimal(a) === location)
   );
-  const discoveredCount = new Set(animals.map(animal => animal.species.trim().toLowerCase())).size;
+  const discoveredCount = countDiscovered(animals);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={ui.page}>

@@ -172,6 +172,23 @@ const photoFor = (item?: UserCollectionItem) => {
 const syncing = new Map<string, Promise<void>>();
 const activeUserId = () => useAuthStore.getState().user?.id || 'local_user';
 
+export function countDiscovered(items: Array<{
+  species?: string;
+  animalSpecies?: string;
+  identifiedSpecies?: string;
+  name?: string;
+  source?: string;
+}>): number {
+  const gifts = items.filter(item => item.source === 'starter_gift').length;
+  const nonGifts = new Set(
+    items
+      .filter(item => item.source !== 'starter_gift')
+      .map(item => (item.identifiedSpecies || item.animalSpecies || item.species || item.name || '').trim().toLowerCase())
+      .filter(Boolean)
+  ).size;
+  return gifts + nonGifts;
+}
+
 export const useCollectionStore = create<CollectionState>((set, get) => ({
   ownerId: null,
   loadError: null,
@@ -197,14 +214,15 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     }
     const snapshot = readCollectionCache(userId, get().catalog);
     set({ ...snapshot, ownerId: userId, starterGiftAvailable: false, pendingNames: previous.ownerId === userId ? previous.pendingNames : {}, isLoading: false, isSubmitting: false, isSyncing: false, loadError: null,
-      summary: { caughtCount: snapshot.collections.length, totalCatalog: snapshot.catalog.length,
+      summary: { caughtCount: countDiscovered(snapshot.collections), totalCatalog: snapshot.catalog.length,
         favoritesCount: snapshot.collections.filter(item => item.isFavorite).length } });
   },
 
   loadCollections: async () => {
     const userId = activeUserId();
     if (get().ownerId !== userId) get().hydrateForUser(userId);
-    set({ collections: restoreStarterGift(userId, get().catalog, get().collections) });
+    const restored = restoreStarterGift(userId, get().catalog, get().collections);
+    set({ collections: restored, summary: { ...get().summary, caughtCount: countDiscovered(restored) } });
     writeCollectionCache(userId, get());
     const version = ++loadVersion;
     set({ isLoading: true, loadError: null });
@@ -260,8 +278,10 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         : hasUnsyncedStarterGift && !giftRemoved ? 'Your starter gift is saved on this device. Pull down to retry syncing it.' : null,
     });
     const grid = get().getGalleryGrid().filter(animal => !animal.isLocked);
-    set({ summary: (!hasUnsyncedStarterGift && summaryData) || { caughtCount: new Set(grid.map(animal => animal.species.toLowerCase())).size,
-      totalCatalog: catalog.length, favoritesCount: collections.filter(item => item.isFavorite).length } });
+    const gridCaughtCount = countDiscovered(grid);
+    set({ summary: (!hasUnsyncedStarterGift && summaryData)
+      ? { ...summaryData, caughtCount: Math.max(summaryData.caughtCount, gridCaughtCount) }
+      : { caughtCount: gridCaughtCount, totalCatalog: catalog.length, favoritesCount: collections.filter(item => item.isFavorite).length } });
     writeCollectionCache(userId, { catalog, collections });
   },
 
@@ -270,7 +290,16 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     if (get().ownerId !== userId) get().hydrateForUser(userId);
     if (!get().catalog.some(animal => animal.code === 'hippopotamus')) throw new Error('The starter gift is not available yet.');
     markStarterGiftClaimed(userId);
-    set({ starterGiftAvailable: false, collections: restoreStarterGift(userId, get().catalog, get().collections) });
+    const updatedCollections = restoreStarterGift(userId, get().catalog, get().collections);
+    const caughtCount = countDiscovered(updatedCollections);
+    set({
+      starterGiftAvailable: false,
+      collections: updatedCollections,
+      summary: {
+        ...get().summary,
+        caughtCount,
+      },
+    });
     writeCollectionCache(userId, get());
     if (userId !== 'local_user') void get().loadCollections();
   },
@@ -331,7 +360,7 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         if (!col.animalId) distinctSpecies.add(col.id);
       });
 
-      const caughtCount = distinctSpecies.size;
+      const caughtCount = countDiscovered(updatedCollections);
       const favoritesCount = updatedCollections.filter((c) => c.isFavorite).length;
 
       return {

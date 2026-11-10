@@ -365,3 +365,15 @@ it('offers starter gift to a second mock account when backend entitlement check 
   ]);
   expect(appStorage.getString(giftClaimedKey('b'))).toBe('true');
 });
+
+
+it('counts the starter gift in summary.caughtCount when claimed and after adding another capture', async () => {
+  const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
+  useCollectionStore.setState({ ownerId: 'a', catalog: [hippo], collections: [] });
+  jest.mocked(claimStarterGiftApi).mockResolvedValue({
+    ...fish('a'), id: 'gift-a', animalId: 'hippo', animalCode: 'hippopotamus',
+    animalSpecies: 'Hippopotamus', identifiedSpecies: 'Hippopotamus', name: 'Hippopotamus', source: 'starter_gift',
+  });
+  useCollectionStore.getState().claimStarterGift();
+  expect(useCollectionStore.getState().summary.caughtCount).toBe(1);
+});
