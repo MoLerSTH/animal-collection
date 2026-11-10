@@ -159,6 +159,35 @@ it('keeps the pending gift visible when backend claiming is temporarily unavaila
   expect(useCollectionStore.getState().loadError).toContain('starter gift');
 });
 
+it('clears starter gift sync error banner on retry when claiming succeeds', async () => {
+  const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
+  useCollectionStore.setState({ catalog: [hippo] });
+  appStorage.set('starterGiftClaimed', 'true');
+
+  // First attempt: offline / claiming rejected
+  jest.mocked(claimStarterGiftApi).mockRejectedValueOnce(new Error('Offline'));
+  await useCollectionStore.getState().loadCollections();
+  expect(useCollectionStore.getState().collections[0].id).toBe(LOCAL_STARTER_GIFT_ID);
+  expect(useCollectionStore.getState().loadError).toContain('starter gift');
+
+  // Second attempt (retry via pull down or retry button): Wi-Fi works, claim succeeds
+  const serverGift: UserCollectionItem = {
+    ...fish('a'),
+    id: 'server-gift-uuid',
+    animalId: 'hippo',
+    animalCode: 'hippopotamus',
+    animalSpecies: 'Hippopotamus',
+    name: 'Hippopotamus',
+    source: 'starter_gift',
+  };
+  jest.mocked(claimStarterGiftApi).mockResolvedValueOnce(serverGift);
+  await useCollectionStore.getState().loadCollections();
+
+  expect(useCollectionStore.getState().loadError).toBeNull();
+  expect(useCollectionStore.getState().collections.some(item => item.id === LOCAL_STARTER_GIFT_ID)).toBe(false);
+  expect(useCollectionStore.getState().collections.some(item => item.id === 'server-gift-uuid')).toBe(true);
+});
+
 it('does not restore a gift that was intentionally deleted from the server', async () => {
   const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
   useCollectionStore.setState({ catalog: [hippo] });

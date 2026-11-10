@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 
 class AnimalCatalogItem(BaseModel):
@@ -33,6 +33,12 @@ class UserCollectionCreate(BaseModel):
     isFavorite: Optional[bool] = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    source: Optional[str] = "capture"
+    identifiedSpecies: Optional[str] = None
+    animalType: Optional[str] = "Unknown"
+    habitatTags: Optional[List[str]] = Field(default_factory=list)
+    capturedAt: Optional[str] = None
+    clientRequestId: Optional[str] = None
 
 
 class UserCollectionUpdate(BaseModel):
@@ -41,6 +47,23 @@ class UserCollectionUpdate(BaseModel):
     favFood: Optional[str] = None
     temperament: Optional[str] = None
     isFavorite: Optional[bool] = None
+    identifiedSpecies: Optional[str] = None
+    animalType: Optional[str] = None
+    habitatTags: Optional[List[str]] = None
+    capturedAt: Optional[str] = None
+
+
+class CollectionNameUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+
+class CollectionNameResponse(BaseModel):
+    id: str
+    name: str
+
+
+class StarterGiftStatusResponse(BaseModel):
+    status: Literal["available", "claimed", "removed"]
 
 
 class UserCollectionItem(BaseModel):
@@ -58,6 +81,12 @@ class UserCollectionItem(BaseModel):
     isFavorite: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    source: str = "capture"
+    identifiedSpecies: Optional[str] = None
+    animalType: Optional[str] = "Unknown"
+    habitatTags: List[str] = Field(default_factory=list)
+    capturedAt: Optional[str] = None
+    clientRequestId: Optional[str] = None
     caughtAt: Optional[str] = None
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
@@ -77,4 +106,3 @@ class PhotoUploadResponse(BaseModel):
     fileName: str
     fileSize: int
     contentType: str
-

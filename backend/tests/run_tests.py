@@ -154,8 +154,31 @@ class TestBackendCollections(unittest.TestCase):
         get_resp = client.get(f"/api/v1/collections/{collection_id}", headers=self.headers)
         self.assertEqual(get_resp.status_code, 404)
 
+    def test_starter_gift_endpoints_and_idempotency(self):
+        # 1. Initial status is 'available'
+        status_resp = client.get("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertEqual(status_resp.status_code, 200)
+        self.assertEqual(status_resp.json(), {"status": "available"})
+
+        # 2. Claim starter gift (idempotent)
+        claim_resp = client.post("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertIn(claim_resp.status_code, [200, 201])
+        gift = claim_resp.json()
+        self.assertEqual(gift["animalCode"], "hippopotamus")
+        self.assertEqual(gift["source"], "starter_gift")
+        self.assertEqual(gift["animalType"], "Mammal")
+        self.assertEqual(gift["habitatTags"], ["aquatic"])
+
+        # Calling again returns same gift
+        claim_again = client.post("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertEqual(claim_again.json()["id"], gift["id"])
+
+        # Status is now claimed
+        status_after = client.get("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertEqual(status_after.json(), {"status": "claimed"})
+
     def test_upload_and_stream_photo(self):
-        file_content = b"fake-jpg-image-bytes"
+        file_content = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00fake-jpg-image-bytes"
         files = {"file": ("test_photo.jpg", file_content, "image/jpeg")}
         upload_resp = client.post("/api/v1/storage/upload", files=files, headers=self.headers)
         self.assertEqual(upload_resp.status_code, 200)
@@ -171,4 +194,3 @@ class TestBackendCollections(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

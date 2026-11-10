@@ -239,15 +239,16 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     if (giftRemoved) appStorage.set(giftRemovedKey(userId), 'true');
     collections = reconcileStarterGifts(userId, collections);
     const catalog = collectionsData !== null && catalogData?.length ? catalogData : previous.catalog;
+    const hasUnsyncedStarterGift = collections.some(item => isLocalStarterGift(item)) || hasPendingStarterGift(userId);
     set({ catalog, collections, isLoading: false,
       starterGiftAvailable: giftStatus === 'available' && !hasPendingStarterGift(userId) &&
         !appStorage.getString(giftServerKey(userId)) && !appStorage.getString(giftRemovedKey(userId)) &&
         !collections.some(item => isLocalStarterGift(item) || item.source === 'starter_gift'),
       loadError: collectionsData === null ? 'Could not sync your album. Saved discoveries are still available. Pull down to retry.'
-        : pendingGift && !gift && !giftRemoved ? 'Your starter gift is saved on this device. Pull down to retry syncing it.' : null,
+        : hasUnsyncedStarterGift && !giftRemoved ? 'Your starter gift is saved on this device. Pull down to retry syncing it.' : null,
     });
     const grid = get().getGalleryGrid().filter(animal => !animal.isLocked);
-    set({ summary: (!pendingGift && summaryData) || { caughtCount: new Set(grid.map(animal => animal.species.toLowerCase())).size,
+    set({ summary: (!hasUnsyncedStarterGift && summaryData) || { caughtCount: new Set(grid.map(animal => animal.species.toLowerCase())).size,
       totalCatalog: catalog.length, favoritesCount: collections.filter(item => item.isFavorite).length } });
     writeCollectionCache(userId, { catalog, collections });
   },
