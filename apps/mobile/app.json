@@ -24,7 +24,9 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.thegentlemenofjuthathep.animalcollection",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "versionCode": 3,
       "allowBackup": false

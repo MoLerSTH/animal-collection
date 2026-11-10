@@ -44,12 +44,14 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('react-native-vision-camera', () => {
   const React = require('react');
   const mockTakePhoto = jest.fn().mockResolvedValue({ path: '/tmp/mock-photo.jpg' });
-  const MockCamera = React.forwardRef((_props: unknown, ref: unknown) => {
+  const MockCamera: any = React.forwardRef((_props: unknown, ref: unknown) => {
     React.useImperativeHandle(ref, () => ({
       takePhoto: mockTakePhoto,
     }));
     return null;
   });
+  MockCamera.getCameraPermissionStatus = jest.fn(() => 'not-determined');
+  MockCamera.requestCameraPermission = jest.fn(async () => 'granted');
   return {
     Camera: MockCamera,
     mockTakePhoto,
@@ -71,17 +73,21 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
 }));
 
-jest.mock('expo-location',()=>({
- requestForegroundPermissionsAsync:jest.fn(async()=>({granted:false})),
- getLastKnownPositionAsync:jest.fn(async()=>null),
- getCurrentPositionAsync:jest.fn(), Accuracy:{Balanced:3},
+jest.mock('expo-location', () => ({
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'denied', canAskAgain: true })),
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false, status: 'undetermined', canAskAgain: true })),
+  getLastKnownPositionAsync: jest.fn(async () => null),
+  getCurrentPositionAsync: jest.fn(),
+  Accuracy: { Balanced: 3 },
 }));
 jest.mock('expo-sharing',()=>({isAvailableAsync:jest.fn(async()=>false),shareAsync:jest.fn(async()=>{})}));
 jest.mock('react-native-view-shot',()=>({captureRef:jest.fn(async()=>'/tmp/polaroid.png'),releaseCapture:jest.fn()}));
 jest.mock('expo-image-picker', () => ({
   launchCameraAsync: jest.fn().mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///mock-camera.jpg' }] }),
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///mock-gallery.jpg' }] }),
+  getCameraPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined', granted: false, canAskAgain: true, expires: 'never' }),
   requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+  getMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined', granted: false, canAskAgain: true, expires: 'never' }),
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
   MediaTypeOptions: { Images: 'Images', Videos: 'Videos', All: 'All' },
   PermissionStatus: { GRANTED: 'granted', DENIED: 'denied', UNDETERMINED: 'undetermined' },

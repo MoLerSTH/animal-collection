@@ -191,4 +191,19 @@ describe('SpeedDialFab', () => {
       expect(ImagePicker.launchCameraAsync).not.toHaveBeenCalled();
     });
   });
+  it('does not re-request camera permission when getCameraPermissionsAsync reports already granted', async () => {
+    jest.mocked(ImagePicker.getCameraPermissionsAsync).mockResolvedValueOnce({
+      status: ImagePicker.PermissionStatus.GRANTED,
+      granted: true,
+      canAskAgain: true,
+      expires: 'never',
+    });
+    render(<SpeedDialFab />);
+    fireEvent.press(screen.getByTestId('speed-dial-main-button'));
+    await act(async () => {
+      fireEvent.press(screen.getAllByLabelText('Take photo with camera')[0]);
+    });
+    await waitFor(() => expect(ImagePicker.launchCameraAsync).toHaveBeenCalled());
+    expect(ImagePicker.requestCameraPermissionsAsync).not.toHaveBeenCalled();
+  });
 });

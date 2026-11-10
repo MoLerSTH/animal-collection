@@ -31,6 +31,8 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
+const CAMERA_PERMISSION_KEY = 'camera_permission_granted';
+
 export default function CameraScreen({ navigation }: Props) {
   const userId = useAuthStore(state => state.user?.id);
   const [usage, setUsage] = useState<AnalysisUsage | null>(null);
@@ -55,6 +57,33 @@ export default function CameraScreen({ navigation }: Props) {
 
   // ตรวจสอบสิทธิ์การเข้าถึงกล้อง
   const { hasPermission, requestPermission } = useCameraPermission();
+  const [permissionGranted, setPermissionGranted] = useState(() => hasPermission || Camera.getCameraPermissionStatus?.() === 'granted' || appStorage.getString(CAMERA_PERMISSION_KEY) === 'true');
+
+  useEffect(() => {
+    const osGranted = hasPermission || Camera.getCameraPermissionStatus?.() === 'granted';
+    if (osGranted) {
+      setPermissionGranted(true);
+      appStorage.set(CAMERA_PERMISSION_KEY, 'true');
+    } else if (focused && appState === 'active' && appStorage.getString(CAMERA_PERMISSION_KEY) === 'true') {
+      void requestPermission().then(granted => {
+        if (granted) {
+          setPermissionGranted(true);
+          appStorage.set(CAMERA_PERMISSION_KEY, 'true');
+        } else {
+          appStorage.delete(CAMERA_PERMISSION_KEY);
+          setPermissionGranted(false);
+        }
+      });
+    }
+  }, [focused, appState, hasPermission, requestPermission]);
+
+  const handleGrantAccess = async () => {
+    const granted = await requestPermission();
+    if (granted) {
+      appStorage.set(CAMERA_PERMISSION_KEY, 'true');
+      setPermissionGranted(true);
+    }
+  };
 
   // ตรวจหาอุปกรณ์กล้อง
   const backDevice = useCameraDevice('back');
@@ -117,7 +146,11 @@ export default function CameraScreen({ navigation }: Props) {
     if (capturing || !cameraVisible || cameraError || !cameraReady || !device || !cameraRef.current || retryUntil > Date.now()) return;
     const captureOwner = useAuthStore.getState().user?.id;
     const consentKey = `analysisConsent:${captureOwner || 'local_user'}`;
-    if (appStorage.getString(consentKey) !== 'v1') {
+    const hasConsent = appStorage.getString(consentKey) === 'v1' || appStorage.getString('analysisConsent:local_user') === 'v1';
+    if (hasConsent && !appStorage.getString(consentKey)) {
+      appStorage.set(consentKey, 'v1');
+    }
+    if (!hasConsent) {
       if (consentPrompt.current) return;
       consentPrompt.current = true;
       Alert.alert('ส่งภาพให้ AI วิเคราะห์', 'ภาพที่ถ่ายจะถูกส่งไปยังเซิร์ฟเวอร์ของ Animal Collection และบริการ AI ภายนอกเพื่อระบุสัตว์ โปรดหลีกเลี่ยงภาพที่มีข้อมูลส่วนตัว', [
@@ -193,7 +226,7 @@ export default function CameraScreen({ navigation }: Props) {
   };
 
   // 1. กรณีผู้ใช้ยังไม่ได้ให้อนุญาตสิทธิ์กล้อง (Camera permission not granted)
-  if (!hasPermission) {
+  if (!permissionGranted && !hasPermission) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
         <View style={styles.permissionCard}>
@@ -205,7 +238,7 @@ export default function CameraScreen({ navigation }: Props) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Grant Camera Access"
-            onPress={requestPermission}
+            onPress={handleGrantAccess}
             style={({ pressed }) => [
               styles.permissionButton,
               pressed && styles.permissionButtonPressed,

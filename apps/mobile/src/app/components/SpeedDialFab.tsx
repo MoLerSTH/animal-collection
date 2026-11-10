@@ -1,3 +1,4 @@
+import { appStorage } from '../../core/storage/mmkv';
 import React, { useRef, useState } from 'react';
 import {
   View,
@@ -132,7 +133,11 @@ export default function SpeedDialFab({ onImageSelected, style }: SpeedDialFabPro
   const handleLaunchCamera = async () => {
     collapse(async () => {
       try {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        const current = await ImagePicker.getCameraPermissionsAsync?.();
+        const permission = current?.granted ? current : await ImagePicker.requestCameraPermissionsAsync();
+        if (permission.granted) {
+          appStorage.set('camera_permission_granted', 'true');
+        }
         if (!permission.granted) {
           Alert.alert(
             'Camera Access Required',
@@ -166,7 +171,8 @@ export default function SpeedDialFab({ onImageSelected, style }: SpeedDialFabPro
   const handleLaunchGallery = async () => {
     collapse(async () => {
       try {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        const current = await ImagePicker.getMediaLibraryPermissionsAsync?.();
+        const permission = current?.granted ? current : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
           Alert.alert(
             'Photo Library Access Required',

@@ -78,7 +78,8 @@ function AnimalDetailContent({
         longitude: number;
       } | undefined;
       try {
-        const permission = await Location.requestForegroundPermissionsAsync();
+        const currentPerm = await Location.getForegroundPermissionsAsync?.();
+        const permission = currentPerm?.granted ? currentPerm : (currentPerm && currentPerm.canAskAgain === false ? currentPerm : await Location.requestForegroundPermissionsAsync());
         if (permission.granted) {
           let timer: ReturnType<typeof setTimeout> | undefined;
           try {

@@ -23,6 +23,7 @@ describe('CameraScreen', () => {
   let removeAppStateListener: jest.Mock;
 
   beforeEach(() => {
+    appStorage.delete('camera_permission_granted');
     appStorage.set(`analysisConsent:${useAuthStore.getState().user?.id || 'local_user'}`, 'v1');
     AppState.currentState = 'active';
     removeAppStateListener = jest.fn();
@@ -254,4 +255,21 @@ it('keeps an unrecognized photo out of the collection and offers retry', async()
  expect(navigation.navigate).not.toHaveBeenCalled();
  fireEvent.press(screen.getByRole('button',{name:'Try Again'}));
  expect(screen.queryByText('No animal found - Try another photo')).toBeNull();
+});
+
+
+it('does not require manual permission prompt again when camera permission was previously granted', async () => {
+  const requestPermission = jest.fn().mockResolvedValue(true);
+  appStorage.set('camera_permission_granted', 'true');
+  jest.mocked(useCameraPermission).mockReturnValue({
+    hasPermission: false,
+    requestPermission,
+  } as any);
+
+  renderScreen();
+
+  await waitFor(() => {
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Grant Camera Access' })).toBeNull();
+  });
 });
