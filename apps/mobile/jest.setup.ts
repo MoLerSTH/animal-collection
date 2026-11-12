@@ -107,3 +107,10 @@ jest.mock('@expo-google-fonts/kanit', () => ({
   Kanit_700Bold: 4,
   Kanit_800ExtraBold: 5,
 }));
+
+jest.mock('expo-application', () => ({
+  nativeApplicationVersion: '1.0.1',
+  nativeBuildVersion: '3',
+  applicationId: 'com.thegentlemenofjuthathep.animalcollection',
+}));
+
