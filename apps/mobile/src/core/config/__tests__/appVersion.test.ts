@@ -54,4 +54,70 @@ describe('appVersion', () => {
       'X-Platform': 'android',
     });
   });
+
+  it('falls back gracefully to app.json when requireOptionalNativeModule returns null', () => {
+    jest.resetModules();
+    const expoModulesCore = require('expo-modules-core') as typeof import('expo-modules-core');
+    jest.spyOn(expoModulesCore, 'requireOptionalNativeModule').mockReturnValueOnce(null);
+    jest.doMock('expo-application', () => {
+      throw new Error('Should not load expo-application when native module is absent');
+    });
+    const isolatedPlatform = (require('react-native') as typeof import('react-native')).Platform;
+    const prevOs = isolatedPlatform.OS;
+    Object.defineProperty(isolatedPlatform, 'OS', { value: 'android', configurable: true });
+    try {
+      const isolated = require('../appVersion') as typeof import('../appVersion');
+      expect(isolated.getAppVersionInfo()).toEqual({
+        version: appConfig.expo.version,
+        buildNumber: String(appConfig.expo.android.versionCode),
+        source: 'config',
+      });
+      expect(isolated.formatAppVersion()).toBe(`${appConfig.expo.version} (${appConfig.expo.android.versionCode})`);
+      expect(isolated.getClientMetadataHeaders()).toEqual({
+        'X-App-Version': `${appConfig.expo.version} (${appConfig.expo.android.versionCode})`,
+        'X-Platform': 'android',
+      });
+    } finally {
+      Object.defineProperty(isolatedPlatform, 'OS', { value: prevOs, configurable: true });
+      jest.doMock('expo-application', () => ({
+        __esModule: true,
+        nativeApplicationVersion: '1.0.1',
+        nativeBuildVersion: '3',
+        applicationId: 'com.thegentlemenofjuthathep.animalcollection',
+      }));
+      jest.resetModules();
+    }
+  });
+
+  it('falls back gracefully to app.json when native module ExpoApplication throws on load', () => {
+    jest.resetModules();
+    jest.doMock('expo-application', () => {
+      throw new Error("Cannot find native module 'ExpoApplication'");
+    });
+    const isolatedPlatform = (require('react-native') as typeof import('react-native')).Platform;
+    const prevOs = isolatedPlatform.OS;
+    Object.defineProperty(isolatedPlatform, 'OS', { value: 'android', configurable: true });
+    try {
+      const isolated = require('../appVersion') as typeof import('../appVersion');
+      expect(isolated.getAppVersionInfo()).toEqual({
+        version: appConfig.expo.version,
+        buildNumber: String(appConfig.expo.android.versionCode),
+        source: 'config',
+      });
+      expect(isolated.formatAppVersion()).toBe(`${appConfig.expo.version} (${appConfig.expo.android.versionCode})`);
+      expect(isolated.getClientMetadataHeaders()).toEqual({
+        'X-App-Version': `${appConfig.expo.version} (${appConfig.expo.android.versionCode})`,
+        'X-Platform': 'android',
+      });
+    } finally {
+      Object.defineProperty(isolatedPlatform, 'OS', { value: prevOs, configurable: true });
+      jest.doMock('expo-application', () => ({
+        __esModule: true,
+        nativeApplicationVersion: '1.0.1',
+        nativeBuildVersion: '3',
+        applicationId: 'com.thegentlemenofjuthathep.animalcollection',
+      }));
+      jest.resetModules();
+    }
+  });
 });
