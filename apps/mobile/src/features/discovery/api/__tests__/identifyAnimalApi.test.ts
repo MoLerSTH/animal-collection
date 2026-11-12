@@ -106,3 +106,16 @@ it.each([{animalType: 'Dragon'}, {habitatTags: 'aquatic'}, {habitatTags: ['unkno
   globalThis.fetch = jest.fn().mockResolvedValue({ok: true, json: async () => ({found: true, species: 'Goldfish', story: 'Fish', ...metadata})});
   await expect(identifyAnimalApi('file:///capture.jpg')).rejects.toThrow('invalid response');
 });
+
+it('throws AnalysisCancelledError without timeout message when external signal aborts', async () => {
+  const external = new AbortController();
+  globalThis.fetch = jest.fn().mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+    (init as RequestInit)?.signal?.addEventListener('abort', () => {
+      reject(new DOMException('Aborted', 'AbortError'));
+    });
+  }));
+  const promise = identifyAnimalApi('file:///capture.jpg', undefined, { signal: external.signal });
+  external.abort();
+  await expect(promise).rejects.toMatchObject({ name: 'AnalysisCancelledError' });
+});
+

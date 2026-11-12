@@ -20,6 +20,13 @@ export class AnimalAnalysisError extends Error {
   }
 }
 
+export class AnalysisCancelledError extends Error {
+  constructor(message: string = 'Animal analysis was cancelled.') {
+    super(message);
+    this.name = 'AnalysisCancelledError';
+  }
+}
+
 const statusMessages: Record<number, string> = {
   401: 'Please sign in again before analyzing a photo.',
   403: 'Please sign in again before analyzing a photo.',
@@ -56,9 +63,28 @@ async function analysisResponseError(response: Response) {
   return new AnimalAnalysisError(code ? quotaMessages[code] : fallback, 429, {code, retryAfterSeconds, resetsAt});
 }
 
-export async function identifyAnimalApi(imageUri: string, token?: string): Promise<AnimalIdentification> {
+export async function identifyAnimalApi(
+  imageUri: string,
+  token?: string,
+  options?: { signal?: AbortSignal },
+): Promise<AnimalIdentification> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 60_000);
+
+  const onExternalAbort = () => {
+    controller.abort();
+  };
+
+  if (options?.signal?.aborted) {
+    controller.abort();
+  } else if (options?.signal) {
+    options.signal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+
   try {
     const body = createPhotoFormData(imageUri);
     const response = await authenticatedFetch(`${getApiBaseUrl()}/api/v1/discovery/identify`, {
@@ -96,6 +122,9 @@ export async function identifyAnimalApi(imageUri: string, token?: string): Promi
       ...(metadata.habitatTags !== undefined ? { habitatTags: metadata.habitatTags as HabitatTag[] } : {}),
     };
   } catch (error) {
+    if (options?.signal?.aborted && !timedOut) {
+      throw new AnalysisCancelledError();
+    }
     console.warn('[Discovery] identifyAnimalApi failed:', error);
     if (controller.signal.aborted) {
       throw new AnimalAnalysisError('Animal analysis took too long. Please try again.');
@@ -105,5 +134,8 @@ export async function identifyAnimalApi(imageUri: string, token?: string): Promi
     throw new AnimalAnalysisError('Cannot reach the analysis service. Check your connection and try again.');
   } finally {
     clearTimeout(timeout);
+    if (options?.signal) {
+      options.signal.removeEventListener('abort', onExternalAbort);
+    }
   }
 }
