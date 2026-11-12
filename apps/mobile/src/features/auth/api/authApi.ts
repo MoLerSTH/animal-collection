@@ -1,5 +1,6 @@
 import { AuthTokens, AuthUser } from '../types';
 import { getApiBaseUrl } from '../../../core/api/config';
+import { mergeClientHeaders } from '../../../core/api/clientHeaders';
 
 export class AuthApiError extends Error {
   constructor(public readonly status: number) {
@@ -31,7 +32,8 @@ async function authRequest(path: string, init: RequestInit) {
   // Allow up to 45s for free-tier backend cold starts (Render/Fly spin-up)
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/${path}`, { ...init, signal: controller.signal });
+    const headers = mergeClientHeaders(init.headers);
+    const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/${path}`, { ...init, headers, signal: controller.signal });
     if (!response.ok) throw new AuthApiError(response.status);
     return await response.json();
   } finally {
@@ -66,8 +68,9 @@ export async function deleteBackendAccount(token: string): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
+    const headers = mergeClientHeaders({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' });
     const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/me`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      method: 'DELETE', headers,
       body: JSON.stringify({ confirmation: 'DELETE' }), signal: controller.signal,
     });
     // A lost successful response can be safely retried using the same app token.

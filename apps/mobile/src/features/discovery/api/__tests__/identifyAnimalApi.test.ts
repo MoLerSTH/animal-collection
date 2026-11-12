@@ -46,7 +46,7 @@ it('uploads the captured photo with authentication and accepts an identified gol
     found: true, species: 'Goldfish', story: 'A freshwater fish.',
   });
   expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/v1/discovery/identify'), expect.objectContaining({
-    method: 'POST', headers: { Authorization: 'Bearer test-session' },
+    method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer test-session' }),
     body: expect.any(FormData), signal: expect.any(AbortSignal),
   }));
 });
