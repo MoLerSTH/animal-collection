@@ -28,23 +28,76 @@ describe('captureFiles', () => {
     expect(stagePendingCapture('https://example.com/cat.jpg', 'pending-123')).toBe('https://example.com/cat.jpg');
   });
 
-  it('deletes pending capture files inside pending-captures/ and ignores other paths', () => {
+  it('deletes pending capture files inside pending-captures/ and ignores other paths or traversal attempts', () => {
     const deleteMock = jest.fn();
-    jest.mocked(File).mockImplementation((...parts: any[]) => ({
-      uri: parts.map(part => part.uri || part).join('/'),
-      exists: true,
-      size: 4,
-      copy: jest.fn(),
-      delete: deleteMock,
-    }) as any);
+    const previousImpl = jest.mocked(File).getMockImplementation();
+    try {
+      jest.mocked(File).mockImplementation((...parts: any[]) => ({
+        uri: parts.map(part => part.uri || part).join('/'),
+        exists: true,
+        size: 4,
+        copy: jest.fn(),
+        delete: deleteMock,
+      }) as any);
 
-    discardPendingCapture('file:///documents/pending-captures/pending-123.jpg');
-    expect(deleteMock).toHaveBeenCalledTimes(1);
+      discardPendingCapture('file:///documents/pending-captures/pending-123.jpg');
+      expect(deleteMock).toHaveBeenCalledTimes(1);
 
-    discardPendingCapture('file:///documents/captures/saved-1.jpg');
-    discardPendingCapture('file:///gallery/user-photo.jpg');
-    discardPendingCapture(undefined);
-    expect(deleteMock).toHaveBeenCalledTimes(1);
+      discardPendingCapture('file:///documents/captures/saved-1.jpg');
+      discardPendingCapture('file:///gallery/user-photo.jpg');
+      discardPendingCapture('file:///documents/pending-captures/../captures/saved-1.jpg');
+      discardPendingCapture('file:///documents/pending-captures/%2e%2e/captures/saved-1.jpg');
+      discardPendingCapture('file:///documents/pending-captures/%2e%2e');
+      discardPendingCapture('file:///documents/pending-captures/sub/photo.jpg');
+      discardPendingCapture(undefined);
+      expect(deleteMock).toHaveBeenCalledTimes(1);
+    } finally {
+      if (previousImpl) {
+        jest.mocked(File).mockImplementation(previousImpl);
+      }
+    }
+  });
+
+  it('does not attempt deletion if the pending file does not exist', () => {
+    const deleteMock = jest.fn();
+    const previousImpl = jest.mocked(File).getMockImplementation();
+    try {
+      jest.mocked(File).mockImplementation((...parts: any[]) => ({
+        uri: parts.map(part => part.uri || part).join('/'),
+        exists: false,
+        size: 0,
+        copy: jest.fn(),
+        delete: deleteMock,
+      }) as any);
+
+      discardPendingCapture('file:///documents/pending-captures/missing.jpg');
+      expect(deleteMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousImpl) {
+        jest.mocked(File).mockImplementation(previousImpl);
+      }
+    }
+  });
+
+  it('safely suppresses errors when deleting pending capture files fails', () => {
+    const previousImpl = jest.mocked(File).getMockImplementation();
+    try {
+      jest.mocked(File).mockImplementation((...parts: any[]) => ({
+        uri: parts.map(part => part.uri || part).join('/'),
+        exists: true,
+        size: 4,
+        copy: jest.fn(),
+        delete: jest.fn().mockImplementation(() => {
+          throw new Error('EPERM: operation not permitted');
+        }),
+      }) as any);
+
+      expect(() => discardPendingCapture('file:///documents/pending-captures/pending-123.jpg')).not.toThrow();
+    } finally {
+      if (previousImpl) {
+        jest.mocked(File).mockImplementation(previousImpl);
+      }
+    }
   });
 
   it('keeps retainCapture saving permanent copies inside captures/', () => {

@@ -27,8 +27,32 @@ export function stagePendingCapture(uri: string, captureId: string): string {
 export function discardPendingCapture(uri?: string): void {
   if (!uri || typeof uri !== 'string') return;
   const pendingDir = new Directory(Paths.document, 'pending-captures');
-  const pendingPrefix = `${pendingDir.uri}/`;
+  const baseUri = pendingDir.uri.replace(/\/+$/, '');
+  const pendingPrefix = `${baseUri}/`;
   if (!uri.startsWith(pendingPrefix)) return;
+
+  const relative = uri.slice(pendingPrefix.length);
+  if (!relative || relative.includes('/') || relative.includes('\\') || relative.includes('?') || relative.includes('#')) {
+    return;
+  }
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(relative);
+  } catch {
+    return;
+  }
+
+  if (
+    decoded === '.' ||
+    decoded === '..' ||
+    decoded.includes('/') ||
+    decoded.includes('\\') ||
+    decoded.includes('..')
+  ) {
+    return;
+  }
+
   try {
     const file = new File(uri);
     if (file.exists) {
