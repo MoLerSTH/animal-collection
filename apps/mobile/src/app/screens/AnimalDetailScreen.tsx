@@ -7,13 +7,16 @@ import { achievements } from '../data/achievements';
 import AppIcon from '../components/AppIcon';
 import { HeartIcon, LocationIcon } from '../components/CatalogIcons';
 import DetailTabs from '../components/DetailTabs';
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Alert, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useCollectionStore } from '../../features/collections/stores/useCollectionStore';
+import { discardPendingCapture } from '../../features/collections/stores/captureFiles';
 import { NameSaveTimeoutError } from '../../features/collections/api/collectionApi';
+import { useAnimalIdentification } from '../../features/discovery/hooks/useAnimalIdentification';
+import { useAnalysisCooldownStore } from '../../features/discovery/stores/useAnalysisCooldownStore';
 import { ui, Button, colors, typography } from '../components/Design';
 import { useTranslation } from '../../core/i18n/useLanguageStore';
 import { locationForAnimal } from './GalleryScreen';
@@ -67,6 +70,105 @@ function AnimalDetailContent({
   const pendingSync = savedRecord?.syncStatus === 'pending' || existing?.syncStatus === 'pending';
   const photo = existing?.imageUri || route.params.imageUri;
   const catalog = store.catalog.find(a => a.name === identifiedSpecies);
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const retryUntil = useAnalysisCooldownStore((state) => state.retryUntil);
+  const syncCooldownOwner = useAnalysisCooldownStore((state) => state.syncOwner);
+  const [manualMode, setManualMode] = useState(false);
+  const [retrySeconds, setRetrySeconds] = useState(0);
+
+  const userEditedSpeciesRef = useRef(false);
+  const userEditedIdentificationRef = useRef(false);
+  const userEditedStoryRef = useRef(false);
+  const savedIdRef = useRef(savedId);
+  savedIdRef.current = savedId;
+
+  const identification = useAnimalIdentification({
+    imageUri: route.params.imageUri,
+    enabled: Boolean(route.params.autoAnalyze && !existing && !savedId && !manualMode),
+    captureOwner: route.params.captureOwner,
+  });
+
+  useEffect(() => {
+    syncCooldownOwner(currentUserId);
+  }, [currentUserId, syncCooldownOwner]);
+
+  useEffect(() => {
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000));
+      setRetrySeconds(remaining);
+      return remaining;
+    };
+    if (update() <= 0) return;
+    const timer = setInterval(() => {
+      if (update() <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [retryUntil]);
+
+  const retryLabel = retrySeconds >= 3600
+    ? `${Math.floor(retrySeconds / 3600)}h ${Math.floor((retrySeconds % 3600) / 60)}m`
+    : `${Math.floor(retrySeconds / 60)}:${String(retrySeconds % 60).padStart(2, '0')}`;
+
+  useEffect(() => {
+    if (
+      identification.status !== 'identified' ||
+      !identification.result ||
+      manualMode ||
+      existing ||
+      savedId
+    ) {
+      return;
+    }
+    const identified = identification.result;
+    if (!userEditedSpeciesRef.current) {
+      setSpecies(identified.species);
+    }
+    if (!userEditedIdentificationRef.current) {
+      setIdentifiedSpecies(identified.species);
+      setAnimalType(identified.animalType ?? 'Unknown');
+      setTags(identified.habitatTags ?? []);
+    }
+    if (!userEditedStoryRef.current) {
+      setStory(identified.story);
+    }
+  }, [identification.status, identification.result, manualMode, existing, savedId]);
+
+  const captureImageUri = route.params.imageUri;
+  const shouldCleanupPendingCapture = Boolean(route.params.autoAnalyze && !route.params.animalId);
+
+  useEffect(() => {
+    if (shouldCleanupPendingCapture && !savedIdRef.current && currentUserId !== route.params.captureOwner) {
+      discardPendingCapture(captureImageUri);
+    }
+  }, [captureImageUri, currentUserId, route.params.captureOwner, shouldCleanupPendingCapture]);
+
+  useEffect(() => {
+    return () => {
+      if (shouldCleanupPendingCapture && !savedIdRef.current) {
+        discardPendingCapture(captureImageUri);
+      }
+    };
+  }, [captureImageUri, shouldCleanupPendingCapture]);
+
+  const handleIdentifyManually = () => {
+    setManualMode(true);
+    setEditingIdentification(true);
+    identification.cancel();
+  };
+
+  const handleRetakePhoto = () => {
+    identification.cancel();
+    discardPendingCapture(route.params.imageUri);
+    navigation.goBack();
+  };
+
+  const handleSignInAgain = () => {
+    identification.cancel();
+    discardPendingCapture(route.params.imageUri);
+    navigation.navigate('Login');
+  };
 
   const save = async () => {
     if (!photo || !species.trim() || store.isSubmitting || saving) return;
@@ -102,7 +204,9 @@ function AnimalDetailContent({
         capturedAt: route.params.capturedAt,
         story
       });
+      savedIdRef.current = result.id;
       setSavedId(result.id);
+      discardPendingCapture(route.params.imageUri);
       const updated = useCollectionStore.getState();
       setNewBadge(achievements(updated.collections).filter(b => b.unlocked).length > before);
       setError('');
@@ -153,9 +257,18 @@ function AnimalDetailContent({
       species={identifiedSpecies}
       animalType={animalType}
       tags={tags}
-      onSpecies={setIdentifiedSpecies}
-      onType={setAnimalType}
-      onTags={setTags}
+      onSpecies={(value) => {
+        userEditedIdentificationRef.current = true;
+        setIdentifiedSpecies(value);
+      }}
+      onType={(value) => {
+        userEditedIdentificationRef.current = true;
+        setAnimalType(value);
+      }}
+      onTags={(value) => {
+        userEditedIdentificationRef.current = true;
+        setTags(value);
+      }}
     />
   );
 
@@ -238,6 +351,105 @@ function AnimalDetailContent({
           )}
         </View>
 
+        {/* Background Identification Status Card */}
+        {!existing && !savedId && (identification.status === 'analyzing' || identification.status === 'not_found' || identification.status === 'error') && (
+          <View style={styles.identificationCard}>
+            {identification.status === 'analyzing' && (
+              <>
+                <View style={styles.identificationHeaderRow}>
+                  <ActivityIndicator size="small" color={colors.pink} />
+                  <Text style={styles.identificationTitle}>{t.detail.analyzingTitle}</Text>
+                </View>
+                <Text style={styles.identificationSubtitle}>{t.detail.analyzingSubtitle}</Text>
+                <Button
+                  label={t.detail.identifyManually}
+                  variant="outline"
+                  onPress={handleIdentifyManually}
+                />
+              </>
+            )}
+
+            {identification.status === 'not_found' && (
+              <>
+                <View style={styles.identificationHeaderRow}>
+                  <AppIcon name="help" size={20} color="#C48834" />
+                  <Text style={styles.identificationTitle}>{t.detail.notFoundTitle}</Text>
+                </View>
+                <Text style={styles.identificationSubtitle}>{t.detail.notFoundHint}</Text>
+                <View style={styles.identificationActionsRow}>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label={t.detail.retakePhoto}
+                      onPress={handleRetakePhoto}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label={t.detail.identifyManually}
+                      variant="outline"
+                      onPress={handleIdentifyManually}
+                    />
+                  </View>
+                </View>
+              </>
+            )}
+
+            {identification.status === 'error' && (
+              <>
+                <View style={styles.identificationHeaderRow}>
+                  <AppIcon name="help" size={20} color="#C0392B" />
+                  <Text style={styles.identificationErrorTitle}>{identification.errorMessage}</Text>
+                </View>
+                {!!identification.errorHint && (
+                  <Text style={styles.identificationSubtitle}>{identification.errorHint}</Text>
+                )}
+                {identification.requiresSignIn ? (
+                  <View style={styles.identificationActionsCol}>
+                    <Button
+                      label={t.detail.signInAgain}
+                      onPress={handleSignInAgain}
+                    />
+                    <Button
+                      label={t.detail.identifyManually}
+                      variant="outline"
+                      onPress={handleIdentifyManually}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.identificationActionsCol}>
+                    <Button
+                      label={retrySeconds > 0 ? `Try again in ${retryLabel}` : t.detail.retryAnalysis}
+                      accessibilityLabel={t.detail.retryAnalysis}
+                      disabled={retrySeconds > 0}
+                      onPress={() => {
+                        if (retrySeconds <= 0) {
+                          identification.retry();
+                        }
+                      }}
+                    />
+                    <View style={styles.identificationActionsRow}>
+                      <View style={{ flex: 1 }}>
+                        <Button
+                          label={t.detail.retakePhoto}
+                          variant="outline"
+                          onPress={handleRetakePhoto}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Button
+                          label={t.detail.identifyManually}
+                          variant="outline"
+                          onPress={handleIdentifyManually}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        )}
+
         {/* Title & Editable Nickname Header */}
         {existing ? (
           <View style={styles.titleSection}>
@@ -304,6 +516,9 @@ function AnimalDetailContent({
                 <Pressable
                   key={animal.id}
                   onPress={() => {
+                    userEditedSpeciesRef.current = true;
+                    userEditedIdentificationRef.current = true;
+                    userEditedStoryRef.current = true;
                     setSpecies(animal.name);
                     setIdentifiedSpecies(animal.name);
                     setAnimalType('Unknown');
@@ -321,7 +536,10 @@ function AnimalDetailContent({
             <TextInput
               accessibilityLabel="Animal name"
               value={species}
-              onChangeText={setSpecies}
+              onChangeText={(value) => {
+                userEditedSpeciesRef.current = true;
+                setSpecies(value);
+              }}
               placeholder="Animal name"
               placeholderTextColor="#A49386"
               style={styles.nameTextInput}
@@ -451,7 +669,14 @@ function AnimalDetailContent({
               accessibilityLabel="Animal story"
               multiline
               value={editingStory ? storyDraft : story}
-              onChangeText={editingStory ? setStoryDraft : setStory}
+              onChangeText={(value) => {
+                if (editingStory) {
+                  setStoryDraft(value);
+                } else {
+                  userEditedStoryRef.current = true;
+                  setStory(value);
+                }
+              }}
               placeholder={t.detail.fieldNotesPlaceholder}
               placeholderTextColor="#A89B90"
               style={styles.storyInput}
@@ -507,7 +732,7 @@ function AnimalDetailContent({
               <Button
                 label={savedId ? t.detail.inCollection : saving || store.isSubmitting ? t.detail.saving : t.detail.addToCollection}
                 icon={<HeartIcon color="white" size={18}/>}
-                disabled={!!savedId || !species.trim() || !identifiedSpecies.trim() || store.isSubmitting || saving}
+                disabled={!!savedId || identification.status === 'analyzing' || !species.trim() || !identifiedSpecies.trim() || store.isSubmitting || saving}
                 onPress={save}
               />
             </View>
@@ -967,5 +1192,48 @@ const styles = StyleSheet.create({
   actionSection: {
     gap: 10,
     paddingTop: 4,
+  },
+  identificationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(74, 48, 34, 0.08)',
+    shadowColor: '#4A3022',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  identificationHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  identificationTitle: {
+    fontFamily: typography.bold,
+    fontSize: 15,
+    color: colors.ink,
+    flex: 1,
+  },
+  identificationErrorTitle: {
+    fontFamily: typography.bold,
+    fontSize: 15,
+    color: '#C0392B',
+    flex: 1,
+  },
+  identificationSubtitle: {
+    fontFamily: typography.regular,
+    fontSize: 13,
+    color: '#7B6A5E',
+    lineHeight: 19,
+  },
+  identificationActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  identificationActionsCol: {
+    gap: 10,
   },
 });
