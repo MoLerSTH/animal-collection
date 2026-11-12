@@ -1,6 +1,8 @@
 jest.mock('../../../features/discovery/api/analysisUsageApi', () => ({analysisUsageApi: async () => null}));
 import { appStorage } from '../../../core/storage/mmkv';
 import { useAuthStore } from '../../../features/auth/stores/useAuthStore';
+import * as captureFiles from '../../../features/collections/stores/captureFiles';
+import { useAnalysisCooldownStore } from '../../../features/discovery/stores/useAnalysisCooldownStore';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { AppState, type AppStateStatus, Linking, Alert } from 'react-native';
@@ -25,6 +27,7 @@ describe('CameraScreen', () => {
   beforeEach(() => {
     appStorage.delete('camera_permission_granted');
     appStorage.set(`analysisConsent:${useAuthStore.getState().user?.id || 'local_user'}`, 'v1');
+    useAnalysisCooldownStore.setState({ ownerId: undefined, retryUntil: 0 });
     AppState.currentState = 'active';
     removeAppStateListener = jest.fn();
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
@@ -94,35 +97,31 @@ describe('CameraScreen', () => {
   });
 
   it('navigates to AnimalDetail with the captured photo path on shutter press', async () => {
-    globalThis.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({found:true,species:'Cat',story:'A domestic cat.',animalType:'Mammal',habitatTags:[]})});
+    globalThis.fetch = jest.fn();
     const { navigation } = renderScreen();
 
     fireEvent.press(screen.getByLabelText('Capture photo'));
 
     await waitFor(() => {
       expect(navigation.navigate).toHaveBeenCalledWith('AnimalDetail', {
-        imageUri: 'file:///tmp/mock-photo.jpg', identifiedSpecies:'Cat', identifiedStory:'A domestic cat.',
-        animalType: 'Mammal', habitatTags: [], capturedAt: expect.any(String),
+        imageUri: expect.stringMatching(/^file:\/\/\/documents\/pending-captures\/.+\.jpg$/),
+        capturedAt: expect.any(String),
+        autoAnalyze: true,
+        captureOwner: useAuthStore.getState().user?.id,
       });
     });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it('shows the shared-service cooldown and blocks capture until retry is allowed', async () => {
     jest.useFakeTimers();
     try {
-      globalThis.fetch = jest.fn().mockResolvedValue({ok: false, status: 429,
-        headers: new Headers({'Retry-After': '2'}),
-        json: async () => ({detail: {code: 'service_busy', retryAfterSeconds: 2}}),
-      });
+      useAnalysisCooldownStore.getState().setCooldown(2, useAuthStore.getState().user?.id);
       renderScreen();
-      await act(async () => { fireEvent.press(screen.getByLabelText('Capture photo')); });
-      expect(screen.getByText('The analysis service is busy. Please wait a moment.')).toBeTruthy();
-      expect(screen.getByText(/did not use your daily allowance/)).toBeTruthy();
-      expect(screen.getByRole('button', {name: 'Waiting for analysis service'})).toBeDisabled();
+      expect(screen.getByText('Try again in 0:02')).toBeTruthy();
       expect(screen.getByLabelText('Capture photo')).toBeDisabled();
-      fireEvent.press(screen.getByRole('button', {name: 'Dismiss camera error'}));
       fireEvent.press(screen.getByLabelText('Capture photo'));
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(mockTakePhoto).not.toHaveBeenCalled();
       await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
       expect(screen.getByText('Try again in 0:01')).toBeTruthy();
       await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
@@ -134,21 +133,27 @@ describe('CameraScreen', () => {
     }
   });
 
-  it('discards an analysis response if the account changes while it is pending', async () => {
+  it('syncs cooldown owner when the signed-in user changes', () => {
     const originalUser = useAuthStore.getState().user;
     const originalTokens = useAuthStore.getState().tokens;
-    useAuthStore.setState({user: {id: 'capture-owner-a', name: 'A', email: 'a@example.com'}, tokens: {accessToken: 'session-a'}});
-    appStorage.set('analysisConsent:capture-owner-a', 'v1');
-    let finish!: (value: unknown) => void;
-    globalThis.fetch = jest.fn().mockImplementation(() => new Promise(resolve => {finish = resolve;}));
-    const {navigation} = renderScreen();
-    fireEvent.press(screen.getByLabelText('Capture photo'));
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    useAuthStore.setState({user: {id: 'capture-owner-b', name: 'B', email: 'b@example.com'}});
-    await act(async () => {finish({ok: true, json: async () => ({found: true, species: 'Cat', story: 'Cat'})});});
-    await waitFor(() => expect(screen.getByLabelText('Capture photo')).toBeEnabled());
-    expect(navigation.navigate).not.toHaveBeenCalled();
-    useAuthStore.setState({user: originalUser, tokens: originalTokens});
+    jest.useFakeTimers();
+    try {
+      useAuthStore.setState({ user: { id: 'user-a', name: 'A', email: 'a@example.com' }, tokens: { accessToken: 'tok-a' } });
+      useAnalysisCooldownStore.getState().setCooldown(30, 'user-a');
+      renderScreen();
+      expect(screen.getByText('Try again in 0:30')).toBeTruthy();
+      expect(screen.getByLabelText('Capture photo')).toBeDisabled();
+
+      act(() => {
+        useAuthStore.setState({ user: { id: 'user-b', name: 'B', email: 'b@example.com' }, tokens: { accessToken: 'tok-b' } });
+      });
+      expect(screen.queryByText(/Try again in/)).toBeNull();
+      expect(screen.getByLabelText('Capture photo')).toBeEnabled();
+      screen.unmount();
+    } finally {
+      jest.useRealTimers();
+      useAuthStore.setState({ user: originalUser, tokens: originalTokens });
+    }
   });
 
   it('releases the camera in the background and reopens it on returning to the app', () => {
@@ -215,16 +220,6 @@ describe('CameraScreen', () => {
     expect(screen.getByLabelText('Capture photo')).toBeEnabled();
   });
 
-  it('distinguishes a failed analysis connection from a failed photo capture', async () => {
-    globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
-    const { navigation } = renderScreen();
-    fireEvent.press(screen.getByLabelText('Capture photo'));
-    await waitFor(() => expect(screen.getByText(/Cannot reach the analysis service/)).toBeTruthy());
-    expect(screen.getByText('Your photo was captured, but could not be analyzed.')).toBeTruthy();
-    expect(screen.queryByText(/Could not capture photo/)).toBeNull();
-    expect(navigation.navigate).not.toHaveBeenCalled();
-  });
-
   it('does not upload or analyze anything when the camera fails to take a photo', async () => {
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
     globalThis.fetch = jest.fn();
@@ -237,26 +232,20 @@ describe('CameraScreen', () => {
     warning.mockRestore();
   });
 
-  it.each([401, 403])('offers a working sign-in action for HTTP %s instead of retrying an invalid session', async status => {
-    globalThis.fetch = jest.fn().mockResolvedValue({ ok: false, status });
+  it('shows a capture error modal and skips navigation if staging the photo fails', async () => {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(captureFiles, 'stagePendingCapture').mockImplementationOnce(() => {
+      throw new Error('Could not read the captured photo.');
+    });
     const { navigation } = renderScreen();
     fireEvent.press(screen.getByLabelText('Capture photo'));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign in again' })).toBeTruthy());
-    fireEvent.press(screen.getByRole('button', { name: 'Sign in again' }));
-    expect(navigation.navigate).toHaveBeenCalledWith('Login');
+    await waitFor(() => expect(screen.getByText('Could not capture photo. Please try again.')).toBeTruthy());
+    expect(navigation.navigate).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'Try Again' }));
+    expect(screen.queryByText('Could not capture photo. Please try again.')).toBeNull();
+    warning.mockRestore();
   });
 });
-
-it('keeps an unrecognized photo out of the collection and offers retry', async()=>{
- globalThis.fetch=jest.fn().mockResolvedValue({ok:true,json:async()=>({found:false,species:'',story:''})});
- const {navigation}=renderScreen();
- fireEvent.press(screen.getByLabelText('Capture photo'));
- await waitFor(()=>expect(screen.getByText('No animal found - Try another photo')).toBeTruthy());
- expect(navigation.navigate).not.toHaveBeenCalled();
- fireEvent.press(screen.getByRole('button',{name:'Try Again'}));
- expect(screen.queryByText('No animal found - Try another photo')).toBeNull();
-});
-
 
 it('does not require manual permission prompt again when camera permission was previously granted', async () => {
   const requestPermission = jest.fn().mockResolvedValue(true);

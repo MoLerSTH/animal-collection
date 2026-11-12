@@ -1,10 +1,12 @@
 import { appStorage } from '../../core/storage/mmkv';
+import { stagePendingCapture } from '../../features/collections/stores/captureFiles';
 import { analysisUsageApi, AnalysisUsage } from '../../features/discovery/api/analysisUsageApi';
+import { useAnalysisCooldownStore } from '../../features/discovery/stores/useAnalysisCooldownStore';
 import AppIcon from '../components/AppIcon';
 import { CameraIcon, SearchIcon } from '../components/CatalogIcons';
 import { Hippo, typography } from '../components/Design';
-import { identifyAnimalApi, AnimalAnalysisError } from '../../features/discovery/api/identifyAnimalApi';
 import { useAuthStore } from '../../features/auth/stores/useAuthStore';
+import { randomUUID } from 'expo-crypto';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -13,7 +15,6 @@ import {
   StyleSheet,
   Dimensions,
   Modal,
-  ActivityIndicator,
   Alert,
   AppState,
   Linking,
@@ -35,6 +36,8 @@ const CAMERA_PERMISSION_KEY = 'camera_permission_granted';
 
 export default function CameraScreen({ navigation }: Props) {
   const userId = useAuthStore(state => state.user?.id);
+  const retryUntil = useAnalysisCooldownStore(state => state.retryUntil);
+  const syncOwner = useAnalysisCooldownStore(state => state.syncOwner);
   const [usage, setUsage] = useState<AnalysisUsage | null>(null);
   const consentPrompt = useRef(false);
   const cameraRef = useRef<Camera>(null);
@@ -47,11 +50,8 @@ export default function CameraScreen({ navigation }: Props) {
   const [front, setFront] = useState(false);
   const [flash, setFlash] = useState(false);
   const [error, setError] = useState(false);
-  const [requiresSignIn, setRequiresSignIn] = useState(false);
-  const [errorMessage,setErrorMessage]=useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [errorHint, setErrorHint] = useState('Please try another photo');
-  const [identified,setIdentified]=useState('');
-  const [retryUntil, setRetryUntil] = useState(0);
   const [retrySeconds, setRetrySeconds] = useState(0);
   const focused = useIsFocused();
 
@@ -111,7 +111,10 @@ export default function CameraScreen({ navigation }: Props) {
   // Track app visibility too: Android can revoke a background camera session.
   const cameraVisible = focused && appState === 'active';
 
-  useEffect(() => { setRetryUntil(0); setRetrySeconds(0); setError(false); }, [userId]);
+  useEffect(() => {
+    syncOwner(userId);
+    setError(false);
+  }, [userId, syncOwner]);
   useEffect(() => {
     const update = () => setRetrySeconds(Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000)));
     update();
@@ -161,16 +164,18 @@ export default function CameraScreen({ navigation }: Props) {
       return;
     }
     setCapturing(true);
-    setRequiresSignIn(false);
-    setIdentified('');
-
-    let formattedUri: string;
-    let capturedAt: string;
     try {
       const photo = await cameraRef.current.takePhoto({ flash: flash && device.hasFlash ? 'on' : 'off' });
       if (!photo?.path) throw new Error('Camera returned no photo');
-      capturedAt = new Date().toISOString();
-      formattedUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+      const capturedAt = new Date().toISOString();
+      const formattedUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+      const stagedUri = stagePendingCapture(formattedUri, randomUUID());
+      navigation.navigate('AnimalDetail', {
+        imageUri: stagedUri,
+        capturedAt,
+        autoAnalyze: true,
+        captureOwner,
+      });
     } catch (captureError) {
       const code = captureError && typeof captureError === 'object' && 'code' in captureError
         ? String(captureError.code) : '';
@@ -180,48 +185,8 @@ export default function CameraScreen({ navigation }: Props) {
         : 'Could not capture photo. Please try again.');
       setErrorHint('Keep the camera open and wait for the preview before taking a photo.');
       setError(true);
-      setCapturing(false);
-      return;
-    }
-
-    try {
-      const token = useAuthStore.getState().tokens?.accessToken;
-      const result = await identifyAnimalApi(formattedUri, token);
-      if (useAuthStore.getState().user?.id !== captureOwner) return;
-      if (!result.found) {
-        setErrorMessage('No animal found - Try another photo');
-        setErrorHint('Move closer and keep the animal in focus.');
-        setError(true);
-        return;
-      }
-      setIdentified(result.species);
-      navigation.navigate('AnimalDetail', {
-        imageUri: formattedUri,
-        identifiedSpecies: result.species,
-        identifiedStory: result.story,
-        animalType: result.animalType,
-        habitatTags: result.habitatTags,
-        capturedAt,
-      });
-    } catch (analysisError) {
-      if (useAuthStore.getState().user?.id !== captureOwner) return;
-      const expiredSession = analysisError instanceof AnimalAnalysisError &&
-        (analysisError.status === 401 || analysisError.status === 403);
-      setRequiresSignIn(expiredSession);
-      setErrorMessage(analysisError instanceof Error ? analysisError.message : 'Animal analysis is unavailable. Please try again.');
-      const quota = analysisError instanceof AnimalAnalysisError ? analysisError.quota : undefined;
-      if (quota?.retryAfterSeconds) setRetryUntil(Date.now() + quota.retryAfterSeconds * 1000);
-      const dailyReset = (quota?.code?.endsWith('_daily_limit') || quota?.code?.endsWith('_weekly_limit')) && quota.resetsAt;
-      setErrorHint(expiredSession ? 'Sign in to connect your account to the analysis service.'
-        : dailyReset ? `Try again after ${new Date(dailyReset).toLocaleString('en-GB', {timeZone: 'Asia/Bangkok', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})} Thailand time.`
-        : quota?.code ? 'This rejected request did not use your daily allowance. Wait for the timer before trying again.'
-        : 'Your photo was captured, but could not be analyzed.');
-      setError(true);
     } finally {
       setCapturing(false);
-      if (captureOwner && useAuthStore.getState().user?.id === captureOwner) {
-        void analysisUsageApi().then(value => { if (useAuthStore.getState().user?.id === captureOwner) setUsage(value); });
-      }
     }
   };
 
@@ -334,8 +299,6 @@ export default function CameraScreen({ navigation }: Props) {
         {!!usage && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>AI remaining: {usage.remaining}/{usage.limit} · resets {new Date(usage.resetsAt).toLocaleString('en-GB', {weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok'})} TH</Text>}
         {retrySeconds > 0 && <Text style={{fontFamily: typography.medium, color: 'white', textAlign: 'center', backgroundColor: '#00000099', padding: 8}}>Try again in {retryLabel}</Text>}
         {/* Shutter Button ด้านล่าง (ก่อนถึง Tab bar) */}
-        {capturing&&<View style={{alignSelf:'center',backgroundColor:'#00000099',borderRadius:24,padding:14,flexDirection:'row',gap:10}}><ActivityIndicator color="#E06D79"/><Text style={{fontFamily: typography.semiBold, color:'white'}}>AI Analyzing...</Text></View>}
-        {!!identified&&<View style={{alignSelf:'center',backgroundColor:'#FBE1DE',borderRadius:20,padding:10,flexDirection:'row',alignItems:'center',gap:6}}><Text style={{fontFamily: typography.bold, color: '#4A3022'}}>{identified}</Text>{/hippo/i.test(identified)&&<><AppIcon name="crown" size={18}/><Text style={{fontFamily: typography.bold, color: '#4A3022'}}>Legendary</Text></>}</View>}
         <View style={styles.shutterArea}>
           <Pressable
             accessibilityRole="button"
@@ -351,18 +314,15 @@ export default function CameraScreen({ navigation }: Props) {
           </Pressable>
         </View>
       </SafeAreaView>
-      <Modal visible={error} transparent animationType="fade" onRequestClose={()=>setError(false)}>
+      <Modal visible={error} transparent animationType="fade" onRequestClose={() => setError(false)}>
         <View style={{flex:1,backgroundColor:'#00000099',justifyContent:'center',padding:32}}>
           <View style={styles.permissionCard}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Dismiss camera error" onPress={()=>setError(false)} style={{position: 'absolute', top:12, right:12, padding:6}}><AppIcon name="close" size={18}/></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Dismiss camera error" onPress={() => setError(false)} style={{position: 'absolute', top:12, right:12, padding:6}}><AppIcon name="close" size={18}/></Pressable>
             <Hippo size={150} magnifier/>
             <Text style={styles.permissionTitle}>{errorMessage}</Text>
             <Text style={styles.permissionText}>{errorHint}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel={requiresSignIn ? 'Sign in again' : retrySeconds > 0 ? 'Waiting for analysis service' : 'Try Again'} disabled={!requiresSignIn && retrySeconds > 0} style={[styles.permissionButton, retrySeconds > 0 && {opacity: 0.6}]} onPress={() => {
-              setError(false);
-              if (requiresSignIn) navigation.navigate('Login');
-            }}>
-              <Text style={styles.permissionButtonText}>{requiresSignIn ? 'Sign in again' : retrySeconds > 0 ? `Try again in ${retryLabel}` : 'Try Again'}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Try Again" style={styles.permissionButton} onPress={() => setError(false)}>
+              <Text style={styles.permissionButtonText}>Try Again</Text>
             </Pressable>
           </View>
         </View>
