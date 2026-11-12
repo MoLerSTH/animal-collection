@@ -1,10 +1,12 @@
 import React from 'react';
 import { Alert, Linking } from 'react-native';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import * as Application from 'expo-application';
 import SettingsScreen from '../SettingsScreen';
 import UserProfileScreen from '../UserProfileScreen';
 import { useAuthStore } from '../../../features/auth/stores/useAuthStore';
 import { useLanguageStore } from '../../../core/i18n/useLanguageStore';
+import { formatAppVersion } from '../../../core/config/appVersion';
 
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'), useNavigation: () => ({navigate: mockNavigate}),
@@ -78,7 +80,22 @@ it('opens Settings from the profile gear and displays the current account', () =
   showSettings();
   expect(screen.getByText('Hippo Fan')).toBeTruthy();
   expect(screen.getByText('fan@example.com')).toBeTruthy();
-  expect(screen.getByText('Version 1.0.1')).toBeTruthy();
+  expect(screen.getByText(`Version ${formatAppVersion()}`)).toBeTruthy();
+});
+
+it('displays overridden native version and includes it in report problem email', () => {
+  jest.replaceProperty(Application, 'nativeApplicationVersion', '2.1.0');
+  jest.replaceProperty(Application, 'nativeBuildVersion', '42');
+
+  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  showSettings();
+
+  expect(screen.getByText('Version 2.1.0 (42)')).toBeTruthy();
+
+  fireEvent.press(screen.getByRole('button', { name: 'Report a problem' }));
+  expect(open).toHaveBeenCalledTimes(1);
+  const mailtoUrl = open.mock.calls[0][0];
+  expect(decodeURIComponent(mailtoUrl)).toContain('App version: 2.1.0 (42)');
 });
 
 it('opens device settings and links to the privacy explanation', () => {
