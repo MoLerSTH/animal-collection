@@ -2,7 +2,7 @@
   "expo": {
     "name": "Animal Collection",
     "slug": "animal-collection",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -12,7 +12,7 @@
         "NSCameraUsageDescription": "Animal Collection requires camera access to photograph animals."
       },
       "bundleIdentifier": "com.thegentlemenofjuthathep.animalcollection",
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +28,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "versionCode": 3,
+      "versionCode": 4,
       "allowBackup": false
     },
     "web": {
