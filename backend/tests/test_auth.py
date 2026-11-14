@@ -101,3 +101,68 @@ def test_protected_route_with_nonexistent_user():
     response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {valid_token_ghost_user}"})
     assert response.status_code == 401
     assert "not found" in response.json().get("detail", "").lower()
+
+
+
+def test_update_username_and_preserve_across_relogin():
+    # 1. Login user
+    login_res = client.post("/api/v1/auth/google", json={"id_token": "mock_google_id_token_test_user"})
+    assert login_res.status_code == 200
+    token = login_res.json()["accessToken"]
+    headers = {"Authorization": f"Bearer {token}"}
+    assert login_res.json()["user"]["name"] == "Jane Doe (Dev)"
+
+    # 2. Update username via PATCH /api/v1/auth/me
+    patch_res = client.patch("/api/v1/auth/me", headers=headers, json={"name": "  นักสำรวจไพร  "})
+    assert patch_res.status_code == 200
+    assert patch_res.json()["name"] == "นักสำรวจไพร"
+
+    # 3. GET /api/v1/auth/me reflects the new name
+    me_res = client.get("/api/v1/auth/me", headers=headers)
+    assert me_res.status_code == 200
+    assert me_res.json()["name"] == "นักสำรวจไพร"
+
+    # 4. Re-login / token refresh with Google should PRESERVE custom username
+    relogin_res = client.post("/api/v1/auth/google", json={"id_token": "mock_google_id_token_test_user"})
+    assert relogin_res.status_code == 200
+    assert relogin_res.json()["user"]["name"] == "นักสำรวจไพร"
+
+
+def test_update_username_validation():
+    login_res = client.post("/api/v1/auth/google", json={"id_token": "mock_google_id_token_test_user"})
+    token = login_res.json()["accessToken"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Too short
+    res_short = client.patch("/api/v1/auth/me", headers=headers, json={"name": "a"})
+    assert res_short.status_code == 422
+
+    # Whitespace only
+    res_space = client.patch("/api/v1/auth/me", headers=headers, json={"name": "   "})
+    assert res_space.status_code == 422
+
+    # Too long (> 30 chars)
+    res_long = client.patch("/api/v1/auth/me", headers=headers, json={"name": "a" * 31})
+    assert res_long.status_code == 422
+
+    # Control characters / newline
+    res_ctrl = client.patch("/api/v1/auth/me", headers=headers, json={"name": "Hello\nWorld"})
+    assert res_ctrl.status_code == 422
+
+
+def test_delete_account():
+    login_res = client.post("/api/v1/auth/google", json={"id_token": "mock_google_id_token_test_user"})
+    token = login_res.json()["accessToken"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Wrong confirmation
+    bad_del = client.request("DELETE", "/api/v1/auth/me", headers=headers, json={"confirmation": "NO"})
+    assert bad_del.status_code == 400
+
+    # Correct confirmation
+    del_res = client.request("DELETE", "/api/v1/auth/me", headers=headers, json={"confirmation": "DELETE"})
+    assert del_res.status_code == 204
+
+    # Subsequent request with token should fail because user is gone
+    me_res = client.get("/api/v1/auth/me", headers=headers)
+    assert me_res.status_code == 401

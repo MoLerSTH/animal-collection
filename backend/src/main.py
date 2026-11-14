@@ -10,11 +10,41 @@ from src.services.storage_service import storage_service
 from src.api.v1 import api_router
 
 
+def ensure_schema_columns(target_engine):
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(target_engine)
+        table_names = inspector.get_table_names()
+        if "users" in table_names:
+            user_cols = {c["name"] for c in inspector.get_columns("users")}
+            with target_engine.connect() as conn:
+                if "starter_gift_status" not in user_cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN starter_gift_status VARCHAR(20) DEFAULT 'available' NOT NULL"))
+                    conn.commit()
+        if "user_collections" in table_names:
+            coll_cols = {c["name"] for c in inspector.get_columns("user_collections")}
+            with target_engine.connect() as conn:
+                if "source" not in coll_cols:
+                    conn.execute(text("ALTER TABLE user_collections ADD COLUMN source VARCHAR(30) DEFAULT 'capture' NOT NULL"))
+                if "identified_species" not in coll_cols:
+                    conn.execute(text("ALTER TABLE user_collections ADD COLUMN identified_species VARCHAR(100)"))
+                if "animal_type" not in coll_cols:
+                    conn.execute(text("ALTER TABLE user_collections ADD COLUMN animal_type VARCHAR(50) DEFAULT 'Unknown'"))
+                if "habitat_tags" not in coll_cols:
+                    conn.execute(text("ALTER TABLE user_collections ADD COLUMN habitat_tags TEXT DEFAULT '[]'"))
+                if "client_request_id" not in coll_cols:
+                    conn.execute(text("ALTER TABLE user_collections ADD COLUMN client_request_id VARCHAR(64)"))
+                conn.commit()
+    except Exception as e:
+        print(f"[Warning] ensure_schema_columns check: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Create tables if they don't exist
     try:
         Base.metadata.create_all(bind=engine)
+        ensure_schema_columns(engine)
         print("[Database] tables verified/created successfully.")
     except Exception as e:
         print(f"[Warning] Could not auto-create database tables on startup ({e}).")

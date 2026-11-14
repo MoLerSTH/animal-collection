@@ -21,6 +21,8 @@ export type RootStackParamList = {
     animalType?: AnimalType;
     habitatTags?: HabitatTag[];
     capturedAt?: string;
+    autoAnalyze?: boolean;
+    captureOwner?: string;
     // Present when opening an already-saved animal from the gallery
     animalId?: string;
   };

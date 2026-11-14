@@ -218,6 +218,10 @@ export async function deleteCollectionApi(id: string, token?: string): Promise<b
     headers: getHeaders(token),
   });
 
+  if (!response.ok && response.status !== 404) {
+    throw new Error('Failed to delete collection entry: ' + response.status);
+  }
+
   return response.ok;
 }
 

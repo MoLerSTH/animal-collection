@@ -154,8 +154,74 @@ class TestBackendCollections(unittest.TestCase):
         get_resp = client.get(f"/api/v1/collections/{collection_id}", headers=self.headers)
         self.assertEqual(get_resp.status_code, 404)
 
+    def test_rename_and_update_identification_fields(self):
+        create_resp = client.post(
+            "/api/v1/collections",
+            json={
+                "clientRequestId": "12345678-1234-4234-8234-123456789abc",
+                "name": "Mystery Pet",
+                "photoUrl": "https://example.com/pet.jpg",
+                "identifiedSpecies": "Goldfish",
+                "animalType": "Fish",
+                "habitatTags": ["aquatic"],
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        card_id = create_resp.json()["id"]
+
+        # Rename via PATCH /collections/{id}/name
+        rename_resp = client.patch(
+            f"/api/v1/collections/{card_id}/name",
+            json={"name": "ปลาอ้วน"},
+            headers=self.headers,
+        )
+        self.assertEqual(rename_resp.status_code, 200)
+        self.assertEqual(rename_resp.json(), {"id": card_id, "name": "ปลาอ้วน"})
+
+        # Update identification and story via PATCH /collections/{id}
+        patch_resp = client.patch(
+            f"/api/v1/collections/{card_id}",
+            json={
+                "identifiedSpecies": "Koi",
+                "animalType": "Fish",
+                "habitatTags": ["aquatic"],
+                "story": "Updated story",
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(patch_resp.status_code, 200)
+        updated = patch_resp.json()
+        self.assertEqual(updated["identifiedSpecies"], "Koi")
+        self.assertEqual(updated["animalType"], "Fish")
+        self.assertEqual(updated["habitatTags"], ["aquatic"])
+        self.assertEqual(updated["story"], "Updated story")
+
+    def test_starter_gift_endpoints_and_idempotency(self):
+        # 1. Initial status is 'available'
+        status_resp = client.get("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertEqual(status_resp.status_code, 200)
+        self.assertEqual(status_resp.json(), {"status": "available"})
+
+        # 2. Claim starter gift (idempotent)
+        claim_resp = client.post("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertIn(claim_resp.status_code, [200, 201])
+        gift = claim_resp.json()
+        self.assertEqual(gift["animalCode"], "hippopotamus")
+        self.assertEqual(gift["source"], "starter_gift")
+        self.assertEqual(gift["animalType"], "Mammal")
+        self.assertEqual(gift["habitatTags"], ["aquatic"])
+
+        # Calling again returns same gift
+        claim_again = client.post("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertEqual(claim_again.json()["id"], gift["id"])
+
+        # Status is now claimed
+        status_after = client.get("/api/v1/collections/starter-gift", headers=self.headers)
+        self.assertEqual(status_after.json(), {"status": "claimed"})
+
     def test_upload_and_stream_photo(self):
-        file_content = b"fake-jpg-image-bytes"
+        file_content = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00fake-jpg-image-bytes"
         files = {"file": ("test_photo.jpg", file_content, "image/jpeg")}
         upload_resp = client.post("/api/v1/storage/upload", files=files, headers=self.headers)
         self.assertEqual(upload_resp.status_code, 200)
@@ -171,4 +237,3 @@ class TestBackendCollections(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

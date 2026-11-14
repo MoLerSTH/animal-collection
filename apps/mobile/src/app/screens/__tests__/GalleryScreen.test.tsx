@@ -50,3 +50,25 @@ it('does not offer a gift to an account that already claimed it', () => {
   render(<GalleryScreen/>);
   expect(screen.queryByRole('button', {name: 'Claim Gift'})).toBeNull();
 });
+
+
+it('counts the starter gift in Total Discovered even when the same species is also photographed', () => {
+  useCollectionStore.setState({
+    collections: [
+      {
+        id: 'gift-1', userId: 'gallery-test', name: 'Hippopotamus', animalId: 'a1',
+        animalCode: 'hippopotamus', animalSpecies: 'Hippopotamus', identifiedSpecies: 'Hippopotamus',
+        category: 'Zoo', photoUrl: 'https://example.com/hippo.jpg', story: '', favFood: '',
+        temperament: '', isFavorite: false, source: 'starter_gift', animalType: 'Mammal',
+      },
+      {
+        id: 'capture-1', userId: 'gallery-test', name: 'Moo Deng', animalId: 'a1',
+        animalCode: 'hippopotamus', animalSpecies: 'Hippopotamus', identifiedSpecies: 'Hippopotamus',
+        category: 'Zoo', photoUrl: 'file:///moodeng.jpg', story: '', favFood: '',
+        temperament: '', isFavorite: true, source: 'capture', animalType: 'Mammal',
+      },
+    ],
+  });
+  render(<GalleryScreen />);
+  expect(screen.getByText('Total Discovered: 2 Species')).toBeTruthy();
+});

@@ -3,10 +3,11 @@ from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.config import settings
-from src.schemas.auth import GoogleLoginRequest, TokenResponse, UserResponse
+from src.schemas.auth import GoogleLoginRequest, TokenResponse, UserResponse, UserUpdateRequest, DeleteAccountRequest
 from src.services.auth_service import verify_google_token, upsert_google_user, create_access_token
 from src.api.deps import get_current_user
 from src.models.user import User
+from src.models.collection import UserCollection
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -74,6 +75,47 @@ def get_my_profile(current_user: User = Depends(get_current_user)):
         googleId=current_user.google_id
     )
 
+
+@router.patch("/me", response_model=UserResponse)
+def update_my_profile(
+    payload: UserUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Updates the currently authenticated user's profile username.
+    """
+    current_user.name = payload.name
+    db.commit()
+    db.refresh(current_user)
+    return UserResponse(
+        id=str(current_user.id),
+        email=current_user.email,
+        name=current_user.name,
+        avatarUrl=current_user.avatar_url,
+        googleId=current_user.google_id
+    )
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_my_account(
+    payload: DeleteAccountRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes the current user account and associated collection data upon confirmation.
+    """
+    if payload.confirmation != "DELETE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation 'DELETE' is required to delete account"
+        )
+
+    db.query(UserCollection).filter(UserCollection.user_id == current_user.id).delete()
+    db.delete(current_user)
+    db.commit()
+    return None
 
 @router.get("/health")
 def auth_health():

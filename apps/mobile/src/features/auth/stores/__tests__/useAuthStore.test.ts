@@ -30,7 +30,10 @@ it('restores a backend-validated session without opening Google sign-in', async 
   useAuthStore.setState({ user: null, tokens: null, isAuthenticated: false });
   await useAuthStore.getState().initializeAuth();
   expect(useAuthStore.getState()).toMatchObject({ user, tokens, isAuthenticated: true, isInitializing: false });
-  expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/auth/me'), expect.objectContaining({ headers: { Authorization: 'Bearer old.backend.jwt' } }));
+  expect(globalThis.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/auth/me'),
+    expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer old.backend.jwt' }) }),
+  );
   expect(executeGoogleSignIn).not.toHaveBeenCalled();
 });
 

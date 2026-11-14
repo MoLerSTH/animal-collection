@@ -46,6 +46,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     name = Column(String(255), nullable=False)
     avatar_url = Column(String(1024), nullable=True)
+    starter_gift_status = Column(String(20), nullable=False, default="available")
     created_at = Column(DateTime, default=get_utc_now, nullable=False)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now, nullable=False)
 
@@ -56,6 +57,7 @@ class User(Base):
             "email": self.email,
             "name": self.name,
             "avatarUrl": self.avatar_url,
+            "starterGiftStatus": self.starter_gift_status,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }

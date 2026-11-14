@@ -4,6 +4,8 @@ import AnimalDetailScreen from '../AnimalDetailScreen';
 import { useCollectionStore, INITIAL_CATALOG_FALLBACK } from '../../../features/collections/stores/useCollectionStore';
 import { useAuthStore } from '../../../features/auth/stores/useAuthStore';
 import { appStorage, StorageKeys } from '../../../core/storage/mmkv';
+import * as captureFiles from '../../../features/collections/stores/captureFiles';
+import { useAnalysisCooldownStore } from '../../../features/discovery/stores/useAnalysisCooldownStore';
 const nav = {
   navigate: jest.fn(),
   goBack: jest.fn()
@@ -11,15 +13,20 @@ const nav = {
 const originalRename = useCollectionStore.getState().renameCollection;
 const originalAdd = useCollectionStore.getState().addCollection;
 const originalIdentification = useCollectionStore.getState().updateIdentification;
+const originalRefreshSession = useAuthStore.getState().refreshSession;
 beforeEach(() => {
   jest.clearAllMocks();
-  useAuthStore.setState({user:null,tokens:null,isAuthenticated:false,isLoading:false});
+  useAnalysisCooldownStore.setState({ ownerId: undefined, retryUntil: 0 });
+  useAuthStore.setState({user:null,tokens:null,isAuthenticated:false,isLoading:false,refreshSession:originalRefreshSession});
   appStorage.clearAll();
   useCollectionStore.setState({
     catalog: INITIAL_CATALOG_FALLBACK,
     collections: [{id:'a1',userId:'detail-test',name:'Hippopotamus',animalId:'a1',animalSpecies:'Hippopotamus',identifiedSpecies:'Hippopotamus',category:'Zoo',photoUrl:'https://example.com/hippo.jpg',story:'',favFood:'',temperament:'',isFavorite:false}],
     isSubmitting: false, isSyncing: false, renameCollection: originalRename, addCollection:originalAdd, updateIdentification:originalIdentification,
   });
+});
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 it('edits the existing card name and displays the confirmed name', async () => {
   const rename = jest.fn().mockImplementation(async (id, name) => {
@@ -238,4 +245,431 @@ it('saves without coordinates if optional GPS does not respond within five secon
     expect(add).toHaveBeenCalledWith(expect.objectContaining({name: 'Cat'}));
     expect(add.mock.calls[0][0].latitude).toBeUndefined();
   } finally { jest.useRealTimers(); }
+});
+
+it('edits and saves field notes on an existing card', async () => {
+  const updateStory = jest.fn().mockImplementation(async (id, story) => {
+    useCollectionStore.setState(state => ({
+      collections: state.collections.map(item => item.id === id ? { ...item, story } : item),
+    }));
+  });
+  useCollectionStore.setState({ updateStory } as any);
+  render(<AnimalDetailScreen navigation={nav} route={{ params: { animalId: 'a1' } } as any} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Edit field notes' }));
+  fireEvent.changeText(screen.getByLabelText('Animal story'), 'Found swimming happily');
+  fireEvent.press(screen.getByRole('button', { name: 'Save field notes' }));
+  await waitFor(() => expect(updateStory).toHaveBeenCalledWith('a1', 'Found swimming happily'));
+  expect(screen.getByText('Found swimming happily')).toBeTruthy();
+});
+
+it('confirms and deletes an existing collection card then navigates back', async () => {
+  const { Alert } = require('react-native');
+  const alertSpy = jest.spyOn(Alert, 'alert');
+  const deleteCollection = jest.fn().mockResolvedValue(undefined);
+  useCollectionStore.setState({ deleteCollection } as any);
+  render(<AnimalDetailScreen navigation={nav} route={{ params: { animalId: 'a1' } } as any} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Delete from collection' }));
+  expect(alertSpy).toHaveBeenCalled();
+  const buttons = alertSpy.mock.calls[0][2] as any[];
+  await act(async () => {
+    await buttons.find((b: any) => b.style === 'destructive')!.onPress!();
+  });
+  expect(deleteCollection).toHaveBeenCalledWith('a1');
+  expect(nav.goBack).toHaveBeenCalled();
+});
+
+it('immediately displays the captured photo while identifying in background, populates fields on resolve, and discards pending capture after saving', async () => {
+  const originalFetch = globalThis.fetch;
+  const { Image } = require('react-native');
+  let resolveFetch!: (value: unknown) => void;
+  globalThis.fetch = jest.fn().mockImplementation(
+    () => new Promise(resolve => { resolveFetch = resolve; }),
+  );
+  useAuthStore.setState({
+    user: { id: 'u1', name: 'Tester', email: 'u1@example.com' },
+    tokens: { accessToken: 'tok-1' },
+    isAuthenticated: true,
+  });
+  const add = jest.fn().mockResolvedValue({ id: 'saved-bg-1' });
+  useCollectionStore.setState({ addCollection: add });
+  const discardSpy = jest.spyOn(captureFiles, 'discardPendingCapture');
+
+  try {
+    render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c1.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    expect(screen.UNSAFE_getByType(Image).props.source).toEqual({
+      uri: 'file:///documents/pending-captures/c1.jpg',
+    });
+    expect(screen.getByText('Identifying animal…')).toBeTruthy();
+    expect(screen.getByText(/You can put your phone down/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add to Collection' })).toBeDisabled();
+
+    await act(async () => {
+      resolveFetch({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          found: true,
+          species: 'Red Panda',
+          story: 'A tree-dwelling mammal.',
+          animalType: 'Mammal',
+          habitatTags: ['mountain'],
+        }),
+      });
+    });
+
+    await waitFor(() => expect(screen.queryByText('Identifying animal…')).toBeNull());
+    expect(screen.getByLabelText('Animal name').props.value).toBe('Red Panda');
+    expect(screen.getByLabelText('Animal story').props.value).toBe('A tree-dwelling mammal.');
+    expect(screen.getByText('ประเภทสัตว์: Mammal')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add to Collection' })).toBeEnabled();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Add to Collection' }));
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          photoUri: 'file:///documents/pending-captures/c1.jpg',
+          name: 'Red Panda',
+          identifiedSpecies: 'Red Panda',
+          animalType: 'Mammal',
+          habitatTags: ['mountain'],
+          story: 'A tree-dwelling mammal.',
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(discardSpy).toHaveBeenCalledWith('file:///documents/pending-captures/c1.jpg'),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+it('does not call AI when opened from a manual gallery pick without autoAnalyze', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = jest.fn();
+  const add = jest.fn().mockResolvedValue({ id: 'manual-1' });
+  useCollectionStore.setState({ addCollection: add });
+
+  try {
+    render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///gallery-pick.jpg',
+            capturedAt: '2026-10-23T13:00:00Z',
+          },
+        } as any}
+      />,
+    );
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(screen.queryByText('Identifying animal…')).toBeNull();
+
+    fireEvent.press(screen.getByText('Hippopotamus'));
+    expect(screen.getByRole('button', { name: 'Add to Collection' })).toBeEnabled();
+    fireEvent.press(screen.getByRole('button', { name: 'Add to Collection' }));
+
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          photoUri: 'file:///gallery-pick.jpg',
+          name: 'Hippopotamus',
+          identifiedSpecies: 'Hippopotamus',
+        }),
+      ),
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+it('cancels background AI on Identify manually, expands IdentificationFields, and preserves user edits', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedSignal: AbortSignal | undefined;
+  let resolveFetch!: (value: unknown) => void;
+  globalThis.fetch = jest.fn().mockImplementation((_url, init?: RequestInit) => {
+    capturedSignal = init?.signal ?? undefined;
+    return new Promise(resolve => { resolveFetch = resolve; });
+  });
+  useAuthStore.setState({
+    user: { id: 'u1', name: 'Tester', email: 'u1@example.com' },
+    tokens: { accessToken: 'tok-1' },
+    isAuthenticated: true,
+  });
+
+  try {
+    render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c2.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    expect(screen.getByText('Identifying animal…')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'Identify manually' }));
+
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(screen.queryByText('Identifying animal…')).toBeNull();
+    expect(screen.getByLabelText('Identified species')).toBeTruthy();
+
+    fireEvent.changeText(screen.getByLabelText('Identified species'), 'Snow Leopard');
+    fireEvent.changeText(screen.getByLabelText('Animal name'), 'My Custom Name');
+    fireEvent.changeText(screen.getByLabelText('Animal story'), 'Spotted on a ridge.');
+
+    await act(async () => {
+      resolveFetch({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          found: true,
+          species: 'Domestic Cat',
+          story: 'A sleepy house cat.',
+          animalType: 'Mammal',
+          habitatTags: [],
+        }),
+      });
+    });
+
+    expect(screen.getByLabelText('Animal name').props.value).toBe('My Custom Name');
+    expect(screen.getByLabelText('Identified species').props.value).toBe('Snow Leopard');
+    expect(screen.getByLabelText('Animal story').props.value).toBe('Spotted on a ridge.');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+it('shows not-found message with working Retake photo and Identify manually actions', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ found: false, species: '', story: '' }),
+  });
+  useAuthStore.setState({
+    user: { id: 'u1', name: 'Tester', email: 'u1@example.com' },
+    tokens: { accessToken: 'tok-1' },
+    isAuthenticated: true,
+  });
+  const discardSpy = jest.spyOn(captureFiles, 'discardPendingCapture');
+
+  try {
+    const { unmount } = render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c3.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('No animal found - Try another photo')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByRole('button', { name: 'Retake photo' }));
+    expect(discardSpy).toHaveBeenCalledWith('file:///documents/pending-captures/c3.jpg');
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c3b.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('No animal found - Try another photo')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByRole('button', { name: 'Identify manually' }));
+    expect(screen.queryByText('No animal found - Try another photo')).toBeNull();
+    expect(screen.getByLabelText('Identified species')).toBeTruthy();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+it('disables Retry analysis with live countdown on 429 cooldown and retries fetch after expiry', async () => {
+  const originalFetch = globalThis.fetch;
+  jest.useFakeTimers();
+  globalThis.fetch = jest
+    .fn()
+    .mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'retry-after' ? '2' : null),
+      },
+      json: async () => ({
+        detail: { code: 'service_busy', retryAfterSeconds: 2 },
+      }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        found: true,
+        species: 'Koala',
+        story: 'Sleeps in eucalyptus.',
+        animalType: 'Mammal',
+        habitatTags: [],
+      }),
+    });
+  useAuthStore.setState({
+    user: { id: 'u1', name: 'Tester', email: 'u1@example.com' },
+    tokens: { accessToken: 'tok-1' },
+    isAuthenticated: true,
+  });
+
+  try {
+    render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c4.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('Try again in 0:02')).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Retry analysis' })).toBeDisabled();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(screen.getByText('Try again in 0:01')).toBeTruthy();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1000);
+    });
+    expect(screen.getByRole('button', { name: 'Retry analysis' })).toBeEnabled();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Retry analysis' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Animal name').props.value).toBe('Koala'),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.useRealTimers();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+it('discards pending capture and navigates to Login when Sign in again is pressed after 401', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = jest.fn().mockResolvedValue({
+    ok: false,
+    status: 401,
+  });
+  useAuthStore.setState({
+    user: { id: 'u1', name: 'Tester', email: 'u1@example.com' },
+    tokens: { accessToken: 'tok-1' },
+    isAuthenticated: true,
+    refreshSession: jest.fn().mockResolvedValue('refreshed-tok'),
+  });
+  const discardSpy = jest.spyOn(captureFiles, 'discardPendingCapture');
+
+  try {
+    render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c4b.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Sign in again' })).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByRole('button', { name: 'Sign in again' }));
+    expect(discardSpy).toHaveBeenCalledWith('file:///documents/pending-captures/c4b.jpg');
+    expect(nav.navigate).toHaveBeenCalledWith('Login');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+it('discards pending capture on unmount when backing out without saving', () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = jest.fn().mockImplementation(
+    (_url, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+      }),
+  );
+  useAuthStore.setState({
+    user: { id: 'u1', name: 'Tester', email: 'u1@example.com' },
+    tokens: { accessToken: 'tok-1' },
+    isAuthenticated: true,
+  });
+  const discardSpy = jest.spyOn(captureFiles, 'discardPendingCapture');
+
+  try {
+    const { unmount } = render(
+      <AnimalDetailScreen
+        navigation={nav}
+        route={{
+          params: {
+            imageUri: 'file:///documents/pending-captures/c5.jpg',
+            autoAnalyze: true,
+            capturedAt: '2026-10-23T13:00:00Z',
+            captureOwner: 'u1',
+          },
+        } as any}
+      />,
+    );
+
+    expect(discardSpy).not.toHaveBeenCalled();
+    unmount();
+    expect(discardSpy).toHaveBeenCalledWith('file:///documents/pending-captures/c5.jpg');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

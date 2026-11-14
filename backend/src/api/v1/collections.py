@@ -1,3 +1,4 @@
+import json
 import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -12,6 +13,9 @@ from src.schemas.collection import (
     UserCollectionUpdate,
     UserCollectionItem,
     CollectionSummaryResponse,
+    CollectionNameUpdate,
+    CollectionNameResponse,
+    StarterGiftStatusResponse,
 )
 
 router = APIRouter(prefix="/collections", tags=["User Collections"])
@@ -31,12 +35,15 @@ def get_collection_summary(
         .filter(UserCollection.user_id == current_user.id)
         .all()
     )
-    
-    # Distinct animal species caught by the user
+
+    # Distinct animal species caught by the user, plus starter gift
     caught_animal_ids = set()
     favorites_count = 0
+    gift_count = 0
     for r in user_records:
-        if r.animal_id:
+        if getattr(r, "source", "capture") == "starter_gift":
+            gift_count += 1
+        elif r.animal_id:
             caught_animal_ids.add(str(r.animal_id))
         else:
             caught_animal_ids.add(r.custom_name.lower())
@@ -44,10 +51,99 @@ def get_collection_summary(
             favorites_count += 1
 
     return CollectionSummaryResponse(
-        caughtCount=len(caught_animal_ids),
+        caughtCount=len(caught_animal_ids) + gift_count,
         totalCatalog=total_catalog,
         favoritesCount=favorites_count,
     )
+
+
+@router.get("/starter-gift", response_model=StarterGiftStatusResponse)
+def get_starter_gift_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Check if the authenticated user has a starter gift available, claimed, or removed.
+    """
+    if getattr(current_user, "starter_gift_status", "available") == "removed":
+        return StarterGiftStatusResponse(status="removed")
+
+    existing_gift = (
+        db.query(UserCollection)
+        .filter(
+            UserCollection.user_id == current_user.id,
+            UserCollection.source == "starter_gift",
+        )
+        .first()
+    )
+    if existing_gift or getattr(current_user, "starter_gift_status", "available") == "claimed":
+        return StarterGiftStatusResponse(status="claimed")
+
+    return StarterGiftStatusResponse(status="available")
+
+
+@router.post("/starter-gift", response_model=UserCollectionItem, status_code=status.HTTP_201_CREATED)
+def claim_starter_gift(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Claim or re-fetch the starter gift for the authenticated user.
+    Idempotent: if already claimed, returns the existing record.
+    If removed, returns 410 Gone.
+    """
+    if getattr(current_user, "starter_gift_status", "available") == "removed":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Starter gift was removed",
+        )
+
+    existing_gift = (
+        db.query(UserCollection)
+        .filter(
+            UserCollection.user_id == current_user.id,
+            UserCollection.source == "starter_gift",
+        )
+        .first()
+    )
+    if existing_gift:
+        if getattr(current_user, "starter_gift_status", None) != "claimed":
+            current_user.starter_gift_status = "claimed"
+            db.commit()
+        return UserCollectionItem.model_validate(existing_gift.to_dict())
+
+    # Find the hippopotamus in catalog
+    hippo = (
+        db.query(Animal)
+        .filter(Animal.code == "hippopotamus")
+        .first()
+    )
+    if not hippo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Starter gift animal catalog item not found",
+        )
+
+    gift = UserCollection(
+        user_id=current_user.id,
+        animal_id=hippo.id,
+        custom_name=hippo.name,
+        photo_url=hippo.default_image_url or "",
+        story=hippo.default_story or "",
+        fav_food=hippo.default_fav_food or "",
+        temperament=hippo.default_temperament or "",
+        is_favorite=False,
+        source="starter_gift",
+        identified_species=hippo.name,
+        animal_type="Mammal",
+        habitat_tags='["aquatic"]',
+    )
+    db.add(gift)
+    current_user.starter_gift_status = "claimed"
+    db.commit()
+    db.refresh(gift)
+
+    return UserCollectionItem.model_validate(gift.to_dict())
 
 
 @router.get("", response_model=List[UserCollectionItem])
@@ -88,6 +184,18 @@ def create_collection_entry(
     """
     Save a new caught animal entry for the authenticated user.
     """
+    if payload.clientRequestId:
+        existing_client_req = (
+            db.query(UserCollection)
+            .filter(
+                UserCollection.user_id == current_user.id,
+                UserCollection.client_request_id == payload.clientRequestId,
+            )
+            .first()
+        )
+        if existing_client_req:
+            return UserCollectionItem.model_validate(existing_client_req.to_dict())
+
     animal = None
     if payload.animalId:
         try:
@@ -95,7 +203,7 @@ def create_collection_entry(
             animal = db.query(Animal).filter(Animal.id == animal_uuid).first()
         except ValueError:
             animal = db.query(Animal).filter(Animal.code == payload.animalId).first()
-    
+
     # Auto-match by name if animalId wasn't found
     if not animal and payload.name:
         search_name = payload.name.strip()
@@ -124,7 +232,15 @@ def create_collection_entry(
                     animal = a
                     break
 
+    cid = uuid.uuid4()
+    if payload.clientRequestId:
+        try:
+            cid = uuid.UUID(payload.clientRequestId)
+        except ValueError:
+            pass
+
     collection = UserCollection(
+        id=cid,
         user_id=current_user.id,
         animal_id=animal.id if animal else None,
         custom_name=payload.name.strip(),
@@ -135,6 +251,11 @@ def create_collection_entry(
         is_favorite=bool(payload.isFavorite),
         latitude=payload.latitude,
         longitude=payload.longitude,
+        source=payload.source or "capture",
+        identified_species=payload.identifiedSpecies or (animal.name if animal else payload.name.strip()),
+        animal_type=payload.animalType or "Unknown",
+        habitat_tags=json.dumps(payload.habitatTags) if payload.habitatTags else "[]",
+        client_request_id=payload.clientRequestId,
     )
 
     db.add(collection)
@@ -142,6 +263,35 @@ def create_collection_entry(
     db.refresh(collection)
 
     return UserCollectionItem.model_validate(collection.to_dict())
+
+
+@router.patch("/{collection_id}/name", response_model=CollectionNameResponse)
+def rename_collection_entry(
+    collection_id: str,
+    payload: CollectionNameUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Rename a collection card.
+    """
+    try:
+        coll_uuid = uuid.UUID(collection_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid collection ID")
+
+    record = (
+        db.query(UserCollection)
+        .filter(UserCollection.id == coll_uuid, UserCollection.user_id == current_user.id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection entry not found")
+
+    record.custom_name = payload.name.strip()
+    db.commit()
+    db.refresh(record)
+    return CollectionNameResponse(id=str(record.id), name=record.custom_name)
 
 
 @router.get("/{collection_id}", response_model=UserCollectionItem)
@@ -177,7 +327,7 @@ def update_collection_entry(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update notes, snack, temperament, or favorite flag for a caught animal.
+    Update notes, snack, temperament, favorite flag, or identification for a caught animal.
     """
     try:
         coll_uuid = uuid.UUID(collection_id)
@@ -202,6 +352,12 @@ def update_collection_entry(
         record.temperament = payload.temperament
     if payload.isFavorite is not None:
         record.is_favorite = payload.isFavorite
+    if payload.identifiedSpecies is not None:
+        record.identified_species = payload.identifiedSpecies.strip()
+    if payload.animalType is not None:
+        record.animal_type = payload.animalType
+    if payload.habitatTags is not None:
+        record.habitat_tags = json.dumps(payload.habitatTags)
 
     db.commit()
     db.refresh(record)
@@ -231,7 +387,9 @@ def delete_collection_entry(
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection entry not found")
 
+    if getattr(record, "source", None) == "starter_gift":
+        current_user.starter_gift_status = "removed"
+
     db.delete(record)
     db.commit()
     return None
-

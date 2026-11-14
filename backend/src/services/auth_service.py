@@ -53,8 +53,9 @@ def upsert_google_user(db: Session, google_info: Dict[str, Any]) -> User:
     ).first()
 
     if user:
-        # Update existing user profile
-        user.name = name
+        # Update existing user profile (preserve user-chosen custom name)
+        if not user.name or not user.name.strip():
+            user.name = name
         if avatar_url:
             user.avatar_url = avatar_url
         if not user.google_id:

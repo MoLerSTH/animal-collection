@@ -11,7 +11,7 @@ import { CameraIcon } from '../components/CatalogIcons';
 import { LockIcon, TrashIcon, GlobeIcon } from '../components/ProfileIcons';
 import AppIcon from '../components/AppIcon';
 import { colors, Hippo, typography, ui } from '../components/Design';
-import appConfig from '../../../app.json';
+import { formatAppVersion } from '../../core/config/appVersion';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'bike2920@gmail.com';
@@ -63,7 +63,7 @@ export default function SettingsScreen({ navigation }: Props) {
   };
   const reportProblem = async () => {
     const subject = encodeURIComponent('Animal Collection — report a problem');
-    const body = encodeURIComponent(`App version: ${appConfig.expo.version}\nDevice: ${Platform.OS} ${Platform.Version}\n\nWhat happened?\n\nSteps to reproduce:\n`);
+    const body = encodeURIComponent(`App version: ${formatAppVersion()}\nDevice: ${Platform.OS} ${Platform.Version}\n\nWhat happened?\n\nSteps to reproduce:\n`);
     try { await Linking.openURL(`mailto:${supportEmail}?subject=${subject}&body=${body}`); }
     catch { Alert.alert('Contact support', `Send your report to ${supportEmail}.`); }
   };
@@ -134,7 +134,7 @@ export default function SettingsScreen({ navigation }: Props) {
         <View style={styles.divider}/>
         <SettingRow title={t.settings.reportProblem} subtitle={supportEmail} icon={<AppIcon name="mail"/>} onPress={reportProblem} disabled={busy}/>
         <View style={styles.divider}/>
-        <View style={styles.versionRow}><Text style={styles.rowTitle}>{t.settings.appName}</Text><Text style={styles.subtitle}>{t.settings.version} {appConfig.expo.version}</Text></View>
+        <View style={styles.versionRow}><Text style={styles.rowTitle}>{t.settings.appName}</Text><Text style={styles.subtitle}>{t.settings.version} {formatAppVersion()}</Text></View>
       </View>
       <View style={[styles.group, {marginTop:12}]}>
         <SettingRow title={t.settings.deleteAccount} subtitle={t.settings.deleteAccountSubtitle} icon={<TrashIcon color="#B4494D" size={23}/>} danger disabled={busy || !user} onPress={() => { setConfirmation(''); setConfirmDelete(true); }}/>

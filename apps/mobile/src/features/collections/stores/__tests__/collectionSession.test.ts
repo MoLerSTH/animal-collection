@@ -159,6 +159,35 @@ it('keeps the pending gift visible when backend claiming is temporarily unavaila
   expect(useCollectionStore.getState().loadError).toContain('starter gift');
 });
 
+it('clears starter gift sync error banner on retry when claiming succeeds', async () => {
+  const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
+  useCollectionStore.setState({ catalog: [hippo] });
+  appStorage.set('starterGiftClaimed', 'true');
+
+  // First attempt: offline / claiming rejected
+  jest.mocked(claimStarterGiftApi).mockRejectedValueOnce(new Error('Offline'));
+  await useCollectionStore.getState().loadCollections();
+  expect(useCollectionStore.getState().collections[0].id).toBe(LOCAL_STARTER_GIFT_ID);
+  expect(useCollectionStore.getState().loadError).toContain('starter gift');
+
+  // Second attempt (retry via pull down or retry button): Wi-Fi works, claim succeeds
+  const serverGift: UserCollectionItem = {
+    ...fish('a'),
+    id: 'server-gift-uuid',
+    animalId: 'hippo',
+    animalCode: 'hippopotamus',
+    animalSpecies: 'Hippopotamus',
+    name: 'Hippopotamus',
+    source: 'starter_gift',
+  };
+  jest.mocked(claimStarterGiftApi).mockResolvedValueOnce(serverGift);
+  await useCollectionStore.getState().loadCollections();
+
+  expect(useCollectionStore.getState().loadError).toBeNull();
+  expect(useCollectionStore.getState().collections.some(item => item.id === LOCAL_STARTER_GIFT_ID)).toBe(false);
+  expect(useCollectionStore.getState().collections.some(item => item.id === 'server-gift-uuid')).toBe(true);
+});
+
 it('does not restore a gift that was intentionally deleted from the server', async () => {
   const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
   useCollectionStore.setState({ catalog: [hippo] });
@@ -305,4 +334,46 @@ it('ignores an old claim response after a new account claims its own local gift'
   expect(useCollectionStore.getState().collections).toEqual([expect.objectContaining({userId: 'b', id: LOCAL_STARTER_GIFT_ID})]);
   expect(appStorage.getString(giftServerKey('b'))).toBeUndefined();
   expect(readCollectionCache('b', [hippo]).collections[0].userId).toBe('b');
+});
+
+
+it('offers starter gift to a second mock account when backend entitlement check fails in dev/mock', async () => {
+  const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
+  jest.mocked(fetchCatalogApi).mockResolvedValue([hippo]);
+  jest.mocked(fetchUserCollectionsApi).mockResolvedValue([]);
+  // First account claims gift on device
+  markStarterGiftClaimed('a');
+  appStorage.set('starterGiftClaimed', 'true');
+  appStorage.set('starterGiftOwner', 'a');
+  appStorage.set(giftServerKey('a'), 'gift-a');
+  appStorage.set('hasSeenOnboarding', 'true');
+
+  // Switch to account 'b' with mock token, backend entitlement check is offline/rejected
+  useAuthStore.setState({ user: account('b'), tokens: { accessToken: 'mock_jwt_access_token_mock_user_bob' } });
+  jest.mocked(fetchStarterGiftStatusApi).mockRejectedValue(new Error('Offline / Mock fallback'));
+
+  await useCollectionStore.getState().loadCollections();
+  // Expect gift to be available to the second mock account on this device
+  expect(useCollectionStore.getState().starterGiftAvailable).toBe(true);
+
+  // Claim gift for second account
+  jest.mocked(claimStarterGiftApi).mockRejectedValue(new Error('Offline / Mock'));
+  useCollectionStore.getState().claimStarterGift();
+  expect(useCollectionStore.getState().starterGiftAvailable).toBe(false);
+  expect(useCollectionStore.getState().collections).toEqual([
+    expect.objectContaining({ userId: 'b', animalCode: 'hippopotamus' }),
+  ]);
+  expect(appStorage.getString(giftClaimedKey('b'))).toBe('true');
+});
+
+
+it('counts the starter gift in summary.caughtCount when claimed and after adding another capture', async () => {
+  const hippo = { ...catalog[0], id: 'hippo', code: 'hippopotamus', name: 'Hippopotamus' };
+  useCollectionStore.setState({ ownerId: 'a', catalog: [hippo], collections: [] });
+  jest.mocked(claimStarterGiftApi).mockResolvedValue({
+    ...fish('a'), id: 'gift-a', animalId: 'hippo', animalCode: 'hippopotamus',
+    animalSpecies: 'Hippopotamus', identifiedSpecies: 'Hippopotamus', name: 'Hippopotamus', source: 'starter_gift',
+  });
+  useCollectionStore.getState().claimStarterGift();
+  expect(useCollectionStore.getState().summary.caughtCount).toBe(1);
 });
