@@ -198,10 +198,10 @@ eas build --platform android --profile production
 ### 3. Git Branching & Promotion Flow
 
 ```text
-feature/*  --->  dev  --->  uat  --->  main (production)
+feature/*  --->  dev (default)  --->  uat (UAT / release)
 ```
 
-1. **Feature / Fix PRs -> `dev`:** All daily engineering work merges into `dev` using [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`).
+1. **Feature / Fix PRs -> `dev`:** `dev` is the default branch. All daily engineering work merges into `dev` using [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`).
 2. **Release Promotion (`dev` -> `uat`):** Once tests, `tsc --noEmit`, and release bundle builds pass, open a PR from `dev` into `uat` with release summary and verification results.
 3. **Hotfix Rule:** Only merge `uat` back into `dev` if a hotfix was committed directly on `uat`.
 
